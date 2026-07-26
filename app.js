@@ -78,23 +78,33 @@
   function blobUrl(blob) { const u = URL.createObjectURL(blob); liveUrls.push(u); return u; }
   function revokeUrls() { liveUrls.forEach(u => URL.revokeObjectURL(u)); liveUrls = []; }
 
-  function compressImage(file) {
+  function loadImageEl(file) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        let { width: w, height: h } = img;
-        const scale = Math.min(1, MAX_PHOTO_PX / Math.max(w, h));
-        w = Math.round(w * scale); h = Math.round(h * scale);
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        c.toBlob(b => b ? resolve(b) : reject(new Error('compress failed')), 'image/jpeg', JPEG_Q);
-      };
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
       img.src = url;
     });
+  }
+  async function compressImage(file) {
+    let src;
+    try { src = await createImageBitmap(file); } catch (e) { src = await loadImageEl(file); }
+    const w0 = src.width, h0 = src.height;
+    if (!w0 || !h0) throw new Error('empty image');
+    const scale = Math.min(1, MAX_PHOTO_PX / Math.max(w0, h0));
+    const w = Math.round(w0 * scale), h = Math.round(h0 * scale);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(src, 0, 0, w, h);
+    if (src.close) src.close();
+    return new Promise((resolve, reject) =>
+      c.toBlob(b => b ? resolve(b) : reject(new Error('compress failed')), 'image/jpeg', JPEG_Q));
+  }
+  // Never lose a field photo: if compression fails (odd format, low memory),
+  // store the original file untouched instead of erroring out.
+  async function processPhoto(file) {
+    try { return await compressImage(file); } catch (e) { return file; }
   }
   function blobToDataURL(blob) {
     return new Promise((resolve, reject) => {
@@ -214,6 +224,7 @@
       if (parts[0] === 'patch') return renderPatch(parts[1], parts[2]);
       if (parts[0] === 'runsheet') return renderRunSheet(parts[1]);
       if (parts[0] === 'stringsheet') return renderStringSheet(parts[1]);
+      if (parts[0] === 'check') return renderCheck(parts[1]);
       if (parts[0] === 'qareport') return renderQAReport(parts[1]);
       if (parts[0] === 'photos') return renderPhotoReport(parts[1]);
       renderJobs();
@@ -402,11 +413,9 @@
         <div class="stat s-green"><b>${patches.length}</b><span>${word === 'area' ? 'areas' : 'patches'}</span></div>
         <div class="stat s-purple"><b>${photos.length}</b><span>photos</span></div>
       </div>
-      <div class="tiles">
-        <button class="tile" data-nav="#/runsheet/${job.id}"><span class="tile-ic t-orange">&#128203;</span>Run sheet</button>
-        <button class="tile" data-nav="#/stringsheet/${job.id}"><span class="tile-ic t-blue">&#128207;</span>String sheet</button>
-        <button class="tile" data-nav="#/qareport/${job.id}"><span class="tile-ic t-green">&#129534;</span>QA report</button>
-        <button class="tile" data-nav="#/photos/${job.id}"><span class="tile-ic t-purple">&#128247;</span>Photo report</button>
+      <button class="btn primary" data-nav="#/check/${job.id}">Generate QA report</button>
+      <div class="linkrow">
+        <button class="linkbtn" data-nav="#/runsheet/${job.id}">Run sheet for the crew &#8250;</button>
       </div>
       <div class="section-title">${word === 'area' ? 'Areas' : 'Patches'} (${patches.length})</div>
       ${patches.length ? patches.map(p => {
@@ -437,19 +446,18 @@
               <input type="text" class="jp-label" data-labelfor="${ph.id}" value="${esc(ph.label)}" placeholder="Add label&hellip;">
             </div>`).join('')}
         </div>
-        <button type="button" class="btn soft" id="addJobPhoto">&#128247; Add job photo</button>
+        <label class="btn soft" id="addJobPhoto">&#128247; Add job photo
+          <input type="file" accept="image/*" capture="environment" multiple data-jobphoto hidden>
+        </label>
       </div>
-      <input type="file" id="jobPhotoInput" accept="image/*" capture="environment" multiple hidden>
       <button class="fab" id="addPatch" aria-label="Add ${word}">+</button>
       </div>`;
 
     bindNav();
 
     // job-level photos: add / label / delete / view
-    const jpInput = document.getElementById('jobPhotoInput');
     const labelTimers = {};
     document.getElementById('jobRoot').addEventListener('click', e => {
-      if (e.target.closest('#addJobPhoto')) { jpInput.click(); return; }
       const d = e.target.closest('[data-delphoto]');
       if (d) {
         e.stopPropagation();
@@ -468,18 +476,17 @@
       clearTimeout(labelTimers[id]);
       labelTimers[id] = setTimeout(() => put('photos', ph), 350);
     });
-    jpInput.addEventListener('change', async () => {
-      const files = Array.from(jpInput.files || []);
-      jpInput.value = '';
+    document.getElementById('jobRoot').addEventListener('change', async e => {
+      const inp = e.target;
+      if (!inp.matches || !inp.matches('input[type=file][data-jobphoto]')) return;
+      const files = Array.from(inp.files || []);
+      inp.value = '';
+      if (!files.length) return;
       for (const f of files) {
-        try {
-          const blob = await compressImage(f);
-          await put('photos', { id: uid(), jobId, patchId: '', category: 'general', label: '', blob, createdAt: Date.now() });
-        } catch (err) {
-          alert('Could not add a photo: ' + err.message);
-        }
+        const blob = await processPhoto(f);
+        await put('photos', { id: uid(), jobId, patchId: '', category: 'general', label: '', blob, createdAt: Date.now() });
       }
-      if (files.length) renderJob(jobId);
+      renderJob(jobId);
     });
 
     document.getElementById('addPatch').addEventListener('click', async () => {
@@ -518,7 +525,9 @@
               <img src="${blobUrl(ph.blob)}" alt="${cat.label} photo">
               <button class="del" data-delphoto="${ph.id}" aria-label="Delete photo">&#10005;</button>
             </div>`).join('')}
-          <button class="add-photo" data-addphoto="${cat.key}" aria-label="Add ${cat.label} photo">&#128247;</button>
+          <label class="add-photo" aria-label="Add ${cat.label} photo">&#128247;
+            <input type="file" accept="image/*" capture="environment" multiple data-cat="${cat.key}" hidden>
+          </label>
         </div>
       </div>`;
     };
@@ -563,7 +572,6 @@
       </div>
 
       <button type="button" class="btn danger no-print" id="delPatch">Delete ${word} ${P}${patch.number}</button>
-      <input type="file" id="photoInput" accept="image/*" capture="environment" multiple hidden>
       </div>`;
 
     const form = document.getElementById('patchForm');
@@ -650,16 +658,8 @@
     renderReadings();
     refreshCalcs();
 
-    // photos
-    const photoInput = document.getElementById('photoInput');
-    let pendingCat = null;
+    // photos — native label-wrapped inputs (reliable on iOS camera flow)
     document.getElementById('patchRoot').addEventListener('click', e => {
-      const addCat = e.target.closest('[data-addphoto]');
-      if (addCat) {
-        pendingCat = addCat.dataset.addphoto;
-        photoInput.click();
-        return;
-      }
       const delId = e.target.closest('[data-delphoto]');
       if (delId) {
         e.stopPropagation();
@@ -671,18 +671,16 @@
       const th = e.target.closest('.thumb img');
       if (th) openLightbox(th.src);
     });
-    photoInput.addEventListener('change', async () => {
-      const files = Array.from(photoInput.files || []);
-      photoInput.value = '';
-      if (!files.length || !pendingCat) return;
-      const cat = pendingCat;
+    document.getElementById('patchRoot').addEventListener('change', async e => {
+      const inp = e.target;
+      if (!inp.matches || !inp.matches('input[type=file][data-cat]')) return;
+      const files = Array.from(inp.files || []);
+      const cat = inp.dataset.cat;
+      inp.value = '';
+      if (!files.length) return;
       for (const f of files) {
-        try {
-          const blob = await compressImage(f);
-          await put('photos', { id: uid(), jobId, patchId, category: cat, blob, createdAt: Date.now() });
-        } catch (err) {
-          alert('Could not add a photo: ' + err.message);
-        }
+        const blob = await processPhoto(f);
+        await put('photos', { id: uid(), jobId, patchId, category: cat, blob, createdAt: Date.now() });
       }
       renderPatch(jobId, patchId);
     });
@@ -704,19 +702,24 @@
   }
 
   // ----------------------------------------------- shared report HTML blocks
+  function naVal(job, key) {
+    const v = job[key];
+    if (v !== '' && v != null) return esc(v);
+    return (job.naFlags || {})[key] ? 'N/A' : '';
+  }
   function jobMetaHTML(job) {
     return `
       <div class="rs-meta">
         <div><b>Date:</b> ${esc(fmtDate(job.date))}</div>
-        <div><b>Client:</b> ${esc(job.client)}</div>
+        <div><b>Client:</b> ${naVal(job, 'client')}</div>
         <div><b>Job #:</b> ${esc(job.jobNo)}</div>
         <div><b>Road:</b> ${esc(job.road)}${job.lat ? ' (' + job.lat.toFixed(5) + ', ' + job.lng.toFixed(5) + ')' : ''}</div>
-        <div><b>Work:</b> ${esc(job.workType)} — ${esc(job.layout || LAYOUTS[0])}</div>
-        <div><b>Mix:</b> ${esc(job.mix)}</div>
+        <div><b>Work:</b> ${naVal(job, 'workType')} — ${esc(job.layout || LAYOUTS[0])}</div>
+        <div><b>Mix:</b> ${naVal(job, 'mix')}</div>
         <div><b>Tack / membrane:</b> ${esc(job.treatment || 'None')}</div>
         <div><b>Client target depth:</b> ${esc(job.targetDepth || DEFAULT_TARGET)} mm</div>
-        <div><b>Crew:</b> ${esc(job.crew)}</div>
-        <div><b>QA by:</b> ${esc(job.qaName)}</div>
+        <div><b>Crew:</b> ${naVal(job, 'crew')}</div>
+        <div><b>QA by:</b> ${naVal(job, 'qaName')}</div>
       </div>`;
   }
 
@@ -774,7 +777,7 @@
           <div><span>Mix ordered</span>
             ${editable
               ? '<input type="number" id="mixOrderedInput" step="0.1" inputmode="decimal" value="' + esc(job.mixOrdered) + '" placeholder="t">'
-              : '<b>' + (ordered != null ? fmt(ordered, 2) + ' t' : '—') + '</b>'}</div>
+              : '<b>' + (ordered != null ? fmt(ordered, 2) + ' t' : ((job.naFlags || {}).mixOrdered ? 'N/A' : '—')) + '</b>'}</div>
           <div><span>Mix used (from stringing)</span><b id="mixUsedCell">${fmt(tot.used, 2)} t</b></div>
           <div><span>Ordered vs used</span><b id="mixVarCell">${variance == null ? '—' : (variance >= 0 ? '+' : '') + fmt(variance, 2) + ' t ' + (variance >= 0 ? '(surplus)' : '(short)')}</b></div>
           <div><span>Prelevel required</span><b>${tot.prelevel ? fmt(tot.prelevel, 2) + ' t' : 'None'}</b></div>
@@ -942,6 +945,99 @@
     }
   }
 
+  // ------------------------------------------- pre-report completeness check
+  const JOB_CHECK_FIELDS = [
+    ['client', 'Client', 'text'],
+    ['workType', 'Job type', 'text'],
+    ['mix', 'Mix type', 'text'],
+    ['crew', 'Crew / foreman', 'text'],
+    ['qaName', 'QA name', 'text'],
+    ['mixOrdered', 'Mix ordered (t)', 'number'],
+  ];
+  function buildChecklist(job, patches, photos) {
+    const items = [];
+    const jf = job.naFlags || {};
+    JOB_CHECK_FIELDS.forEach(([key, label, inputType]) => {
+      const v = job[key];
+      if ((v === '' || v == null) && !jf[key]) items.push({ type: 'job', key, label, inputType });
+    });
+    const P = pfx(job);
+    patches.forEach(p => {
+      const pf = p.naFlags || {};
+      const tag = P + p.number;
+      if (!(num(p.length) && num(p.width)) && !pf.size) items.push({ type: 'patch', patch: p, key: 'size', label: tag + ' — size (length × width)' });
+      if (!p.location && !pf.location) items.push({ type: 'patch', patch: p, key: 'location', label: tag + ' — location on site' });
+      if (!(p.readings || []).some(r => num(r.depth) > 0) && !pf.readings) items.push({ type: 'patch', patch: p, key: 'readings', label: tag + ' — stringing depth readings' });
+      PHOTO_CATS.forEach(cat => {
+        const k = 'photo_' + cat.key;
+        if (!photos.some(ph => ph.patchId === p.id && ph.category === cat.key) && !pf[k]) {
+          items.push({ type: 'patch', patch: p, key: k, label: tag + ' — no ' + cat.label + ' photos' });
+        }
+      });
+    });
+    return items;
+  }
+
+  async function renderCheck(jobId) {
+    const job = await get('jobs', jobId);
+    if (!job) { location.hash = '#/'; return; }
+    const patches = (await getAll('patches', 'jobId', jobId)).sort((a, b) => a.number - b.number);
+    const photos = await getAll('photos', 'jobId', jobId);
+    const items = buildChecklist(job, patches, photos);
+    if (!items.length) { location.replace('#/qareport/' + jobId); return; }
+    setChrome('Report check', true);
+
+    view.innerHTML = `
+      <div id="checkRoot">
+      <div class="page-head">
+        <h2>Almost there</h2>
+        <div class="sub">${items.length} item${items.length > 1 ? 's' : ''} still missing. Fill them in now, or mark N/A if not required for this job.</div>
+      </div>
+      <div class="card">
+        ${items.map((it, i) => `
+          <div class="check-row">
+            <div class="grow">
+              <div class="check-label">${esc(it.label)}</div>
+              ${it.type === 'job' ? `<input type="${it.inputType}" ${it.inputType === 'number' ? 'step="0.1" inputmode="decimal"' : ''} data-jobfield="${it.key}" placeholder="Enter ${esc(it.label.toLowerCase())}">` : ''}
+            </div>
+            ${it.type === 'patch' ? `<button class="btn soft small" data-nav="#/patch/${jobId}/${it.patch.id}">Open</button>` : ''}
+            <button class="btn soft small na-btn" data-na="${i}">N/A</button>
+          </div>`).join('')}
+      </div>
+      <button class="btn primary" id="contBtn">Continue to QA report</button>
+      <div class="sub" style="text-align:center;margin-top:10px">You can continue anyway — unresolved items just stay blank in the report.</div>
+      </div>`;
+
+    bindNav();
+    const root = document.getElementById('checkRoot');
+    const fieldTimers = {};
+    root.addEventListener('input', e => {
+      const k = e.target.dataset.jobfield;
+      if (!k) return;
+      job[k] = k === 'mixOrdered' ? (e.target.value === '' ? '' : num(e.target.value)) : e.target.value.trim();
+      clearTimeout(fieldTimers[k]);
+      fieldTimers[k] = setTimeout(() => put('jobs', job), 300);
+    });
+    root.addEventListener('click', async e => {
+      const na = e.target.dataset.na;
+      if (na === undefined) return;
+      const it = items[na];
+      if (it.type === 'job') {
+        job.naFlags = job.naFlags || {};
+        job.naFlags[it.key] = true;
+        await put('jobs', job);
+      } else {
+        it.patch.naFlags = it.patch.naFlags || {};
+        it.patch.naFlags[it.key] = true;
+        await put('patches', it.patch);
+      }
+      renderCheck(jobId);
+    });
+    document.getElementById('contBtn').addEventListener('click', () => {
+      location.hash = '#/qareport/' + jobId;
+    });
+  }
+
   // ------------------------------------------------- consolidated QA report
   async function renderQAReport(jobId) {
     const job = await get('jobs', jobId);
@@ -995,7 +1091,7 @@
 
     view.innerHTML = `
       <button class="btn primary no-print" onclick="window.print()">Print / Save PDF</button>
-      <div class="card">
+      <div class="runsheet">
         <div class="rs-head">
           <h2>QA Photo Report</h2>
           <div class="sub">${esc(job.name || '')} &middot; ${esc(fmtDate(job.date))} &middot; ${esc(job.client)}${job.jobNo ? ' &middot; #' + esc(job.jobNo) : ''}</div>
