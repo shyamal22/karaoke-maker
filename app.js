@@ -280,7 +280,7 @@
                 ${countBy[j.id] ? '<span class="badge grey">' + countBy[j.id] + ' ' + patchPlural(j, countBy[j.id]) + '</span>' : ''}
               </div>
             </div>
-            <span class="chev">&#8250;</span>
+            <span class="chev">&#8594;</span>
           </div>
         </div>`).join('');
     }
@@ -433,7 +433,7 @@
       </div>
       <button class="btn primary" data-nav="#/check/${job.id}">Generate QA report</button>
       <div class="linkrow">
-        <button class="linkbtn" data-nav="#/runsheet/${job.id}">Run sheet for the crew &#8250;</button>
+        <button class="linkbtn" data-nav="#/runsheet/${job.id}">Run sheet for the crew &#8594;</button>
       </div>
       <div class="section-title">${word === 'area' ? 'Areas' : 'Patches'} (${patches.length})</div>
       ${patches.length ? patches.map(p => {
@@ -449,7 +449,7 @@
                 ${avg ? ' &middot; avg cut ' + fmt(avg, 0) + ' mm' : ''}</div>
               <div class="sub">${photoCount[p.id] || 0} photo${(photoCount[p.id] || 0) === 1 ? '' : 's'}${(p.readings || []).length ? ' &middot; ' + p.readings.length + ' string depth' + (p.readings.length > 1 ? 's' : '') : ''}</div>
             </div>
-            <span class="chev">&#8250;</span>
+            <span class="chev">&#8594;</span>
           </div>
         </div>`;
       }).join('') : '<div class="empty"><div class="empty-icon">&#128736;&#65039;</div>Nothing captured yet.<br>Tap <b>+</b> to add the first ' + word + '.</div>'}
