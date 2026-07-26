@@ -4,17 +4,13 @@ A simple, phone-friendly app for QA staff on asphalt crews doing **mill & fill**
 
 ## What it does
 
-- **Jobs** — date, client, job/PO number, road, work type (Mill & Fill / Paving only), mix, crew, QA name.
-- **Patches** — per patch: location on site (chainage / house number / lane), one-tap **GPS capture**, length × width (area is calculated automatically), design depth, and notes for the paving crew.
-- **Stringing depths** — any number of measured cut-depth readings per patch (position + mm), each averaged automatically, with their own **depth photos**.
-- **Photos** — multiple photos per patch in each category:
-  - Before
-  - Milled
-  - Spray / Membrane
-  - Finish
-  - Stringing / Depth
-  Photos are taken straight from the camera and compressed on-device.
-- **Paving run sheet** — one tap builds a printable run sheet: every patch with location, size, area, design depth, average measured cut depth, string readings and **estimated tonnes** (area × depth × density, density adjustable per job, default 2.4 t/m³), plus totals and sign-off lines. Print it or save it as a PDF from the phone. Also exports **CSV**.
+- **Jobs** — date, client, job/PO number, road + job GPS, work type (Mill & Fill / Paving only), **job layout** (multiple patches or one single large area — QA picks per job), **mix type** (pick from a list or type your own), **tack coat / membrane seal** (Grade 4 or Grade 3/5), **client target depth** (default 40 mm), **mix ordered (t)**, crew, QA name and density.
+- **Patches / areas** — per patch: location on site (chainage / house number / lane), one-tap **GPS capture**, length × width (area is calculated automatically), design depth (defaults to the job's target depth), a **Deep lift** flag for patches deeper than the standard lift, and notes for the paving crew.
+- **Stringing depths** — any number of measured cut-depth readings per patch (position + mm), averaged automatically, with their own **depth photos**. Each reading is compared against the target depth, and wherever the cut is deeper the app calculates the **prelevel required** (mm and tonnes).
+- **Photos** — multiple photos per patch in each category: Before, Milled, Spray / Membrane, Finish, Stringing / Depth. Taken straight from the camera and compressed on-device.
+- **Paving run sheet** — every patch with location, size, area, design depth, average measured cut depth, string readings, deep-lift flags, **estimated tonnes** and **prelevel tonnes**, plus totals and sign-off lines. Print / save as PDF, or export **CSV**.
+- **String sheet** — a printable table of stringing readings for each patch (position, depth, ± vs target), with a **mix & prelevel summary**: mix ordered (editable right on the sheet) vs **mix used calculated from the stringing measurements**, surplus/short variance, and total prelevel required.
+- **QA report (PDF)** — one consolidated printable document: job details, run sheet, mix & prelevel summary, all stringing sheets and the full photo record — save it as a single PDF from the phone.
 - **QA photo report** — printable report of every photo, grouped by patch and category.
 - **Backup** — export/import everything (including photos) as a single file from the ⋮ menu.
 
@@ -34,9 +30,9 @@ The app is plain HTML/JS — any static hosting works. The easiest free option i
 
 ## Field workflow
 
-1. **New job** → fill in client, road, mix, crew.
-2. For each patch: **+** → enter location, tap **GPS**, take **Before** photos, enter length/width/design depth.
-3. After milling: take **Milled** photos, add **stringing depth readings** (position + mm) and **depth photos**.
+1. **New job** → pick the layout (patches or single area), choose the mix, tack coat / membrane grade, set the client's target depth, enter mix ordered, client, road, crew.
+2. For each patch: **+** → enter location, tap **GPS**, take **Before** photos, enter length/width. Tick **Deep lift** and set the deeper design depth where needed.
+3. After milling: take **Milled** photos, add **stringing depth readings** (position + mm) and **depth photos** — the app flags any prelevel required straight away.
 4. After spraying: **Spray / Membrane** photos.
 5. After paving/rolling: **Finish** photos.
-6. Tap **Run sheet** → print / save PDF / CSV and hand it to the paving crew. **Photo report** gives the client the full photo record.
+6. Hand the **Run sheet** to the paving crew, check ordered-vs-used on the **String sheet**, and save the consolidated **QA report** as a PDF for the client.

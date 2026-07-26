@@ -12,7 +12,11 @@
   ];
   const STRING_CAT = { key: 'stringing', label: 'Stringing / Depth' };
   const ALL_CATS = PHOTO_CATS.concat([STRING_CAT]);
-  const DEFAULT_DENSITY = 2.4; // t/m3 compacted asphalt
+  const MIX_TYPES = ['AC10', 'AC14', 'AC20', 'SMA10', 'SMA14', 'OGPA', 'Mix 10', 'Mix 20'];
+  const TREATMENTS = ['None', 'Tack coat', 'Membrane seal — Grade 4', 'Membrane seal — Grade 3/5'];
+  const LAYOUTS = ['Multiple patches', 'Single large area'];
+  const DEFAULT_DENSITY = 2.4;   // t/m3 compacted asphalt
+  const DEFAULT_TARGET = 40;     // mm generic depth
   const MAX_PHOTO_PX = 1600;
   const JPEG_Q = 0.8;
 
@@ -108,17 +112,47 @@
     return new Blob([arr], { type: mime });
   }
 
-  // ------------------------------------------------------------------ helpers
+  // ------------------------------------------------------------- calculations
   function patchAvgDepth(p) {
     const rs = (p.readings || []).map(r => num(r.depth)).filter(d => d > 0);
     if (!rs.length) return 0;
     return rs.reduce((a, b) => a + b, 0) / rs.length;
   }
   function patchArea(p) { return num(p.length) * num(p.width); }
-  function patchTonnes(p, density) {
-    const depth = patchAvgDepth(p) || num(p.depth); // measured beats design
-    return patchArea(p) * (depth / 1000) * (density || DEFAULT_DENSITY);
+  function jobDensity(job) { return (job && num(job.density)) || DEFAULT_DENSITY; }
+  // target depth for a patch: its own design depth, else the job's client target
+  function patchTarget(p, job) { return num(p.depth) || (job && num(job.targetDepth)) || 0; }
+  // best-known depth: measured stringing average beats design
+  function patchBestDepth(p, job) { return patchAvgDepth(p) || patchTarget(p, job); }
+  // estimated tonnes at best-known depth (run sheet / totals)
+  function patchTonnes(p, job) {
+    return patchArea(p) * (patchBestDepth(p, job) / 1000) * jobDensity(job);
   }
+  // mix used, strictly from stringing measurements (0 when no readings yet)
+  function patchUsedTonnes(p, job) {
+    const avg = patchAvgDepth(p);
+    return avg ? patchArea(p) * (avg / 1000) * jobDensity(job) : 0;
+  }
+  // prelevel required where the measured cut is deeper than the target depth
+  function patchPrelevel(p, job) {
+    const avg = patchAvgDepth(p);
+    const target = patchTarget(p, job);
+    if (!avg || !target || avg <= target) return { mm: 0, tonnes: 0 };
+    const mm = avg - target;
+    return { mm, tonnes: patchArea(p) * (mm / 1000) * jobDensity(job) };
+  }
+  function jobTotals(job, patches) {
+    return {
+      area: patches.reduce((a, p) => a + patchArea(p), 0),
+      tonnes: patches.reduce((a, p) => a + patchTonnes(p, job), 0),
+      used: patches.reduce((a, p) => a + patchUsedTonnes(p, job), 0),
+      prelevel: patches.reduce((a, p) => a + patchPrelevel(p, job).tonnes, 0),
+      measured: patches.filter(p => patchAvgDepth(p) > 0).length,
+    };
+  }
+  function pfx(job) { return job && job.layout === 'Single large area' ? 'A' : 'P'; }
+  function patchWord(job) { return job && job.layout === 'Single large area' ? 'area' : 'patch'; }
+
   function todayISO() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -174,6 +208,8 @@
       if (parts[0] === 'job') return renderJob(parts[1]);
       if (parts[0] === 'patch') return renderPatch(parts[1], parts[2]);
       if (parts[0] === 'runsheet') return renderRunSheet(parts[1]);
+      if (parts[0] === 'stringsheet') return renderStringSheet(parts[1]);
+      if (parts[0] === 'qareport') return renderQAReport(parts[1]);
       if (parts[0] === 'photos') return renderPhotoReport(parts[1]);
       renderJobs();
     } catch (err) {
@@ -200,7 +236,7 @@
             <div class="grow">
               <h3>${esc(j.name || j.road || 'Untitled job')}</h3>
               <div class="sub">${esc(fmtDate(j.date))} &middot; ${esc(j.client || 'No client')}${j.jobNo ? ' &middot; #' + esc(j.jobNo) : ''}</div>
-              <div class="sub">${esc(j.workType || '')}${countBy[j.id] ? ' &middot; ' + countBy[j.id] + ' patch' + (countBy[j.id] > 1 ? 'es' : '') : ''}</div>
+              <div class="sub">${esc(j.workType || '')}${countBy[j.id] ? ' &middot; ' + countBy[j.id] + ' ' + patchWord(j) + (countBy[j.id] > 1 ? 's' : '') : ''}</div>
             </div>
             <span class="badge ${j.workType === 'Paving only' ? 'green' : 'orange'}">${j.workType === 'Paving only' ? 'PAVE' : 'M&amp;F'}</span>
           </div>
@@ -214,7 +250,12 @@
   async function renderJobForm(jobId) {
     const job = jobId ? await get('jobs', jobId) : null;
     setChrome(job ? 'Edit job' : 'New job', true);
-    const j = job || { date: todayISO(), workType: 'Mill & Fill', density: DEFAULT_DENSITY };
+    const j = job || {
+      date: todayISO(), workType: 'Mill & Fill', layout: LAYOUTS[0],
+      treatment: TREATMENTS[0], density: DEFAULT_DENSITY, targetDepth: DEFAULT_TARGET,
+    };
+    let gpsLat = j.lat, gpsLng = j.lng;
+
     view.innerHTML = `
       <form id="jobForm" class="card">
         <label class="fld"><span>Job name / description</span>
@@ -229,14 +270,35 @@
           <input type="text" name="client" value="${esc(j.client)}" placeholder="Client name"></label>
         <label class="fld"><span>Road / location</span>
           <input type="text" name="road" value="${esc(j.road)}" placeholder="Road name, suburb"></label>
+        <div class="row" style="margin-bottom:12px">
+          <input type="text" id="jobGps" class="grow" readonly value="${gpsLat ? gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6) : ''}" placeholder="Job GPS not captured">
+          <button type="button" class="btn outline small" id="jobGpsBtn">&#128205; GPS</button>
+        </div>
         <div class="grid2">
           <label class="fld"><span>Work type</span>
             <select name="workType">
               <option${j.workType === 'Mill & Fill' ? ' selected' : ''}>Mill &amp; Fill</option>
               <option${j.workType === 'Paving only' ? ' selected' : ''}>Paving only</option>
             </select></label>
+          <label class="fld"><span>Job layout</span>
+            <select name="layout">
+              ${LAYOUTS.map(l => `<option${j.layout === l ? ' selected' : ''}>${l}</option>`).join('')}
+            </select></label>
+        </div>
+        <div class="grid2">
           <label class="fld"><span>Mix type</span>
-            <input type="text" name="mix" value="${esc(j.mix)}" placeholder="e.g. AC10"></label>
+            <input type="text" name="mix" list="mixList" value="${esc(j.mix)}" placeholder="Choose or type">
+            <datalist id="mixList">${MIX_TYPES.map(m => `<option value="${m}">`).join('')}</datalist></label>
+          <label class="fld"><span>Tack coat / membrane</span>
+            <select name="treatment">
+              ${TREATMENTS.map(t => `<option${j.treatment === t ? ' selected' : ''}>${t}</option>`).join('')}
+            </select></label>
+        </div>
+        <div class="grid2">
+          <label class="fld"><span>Client target depth (mm)</span>
+            <input type="number" name="targetDepth" step="5" inputmode="numeric" value="${esc(j.targetDepth != null ? j.targetDepth : DEFAULT_TARGET)}"></label>
+          <label class="fld"><span>Mix ordered (t)</span>
+            <input type="number" name="mixOrdered" step="0.1" inputmode="decimal" value="${esc(j.mixOrdered)}" placeholder="e.g. 42.5"></label>
         </div>
         <div class="grid2">
           <label class="fld"><span>Crew / foreman</span>
@@ -252,12 +314,29 @@
         ${job ? '<button type="button" class="btn danger" id="delJob">Delete job</button>' : ''}
       </form>`;
 
+    document.getElementById('jobGpsBtn').addEventListener('click', () => {
+      const btn = document.getElementById('jobGpsBtn');
+      btn.disabled = true; btn.textContent = '…';
+      navigator.geolocation.getCurrentPosition(pos => {
+        gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude;
+        document.getElementById('jobGps').value = gpsLat.toFixed(6) + ', ' + gpsLng.toFixed(6);
+        btn.disabled = false; btn.textContent = '📍 GPS';
+      }, err => {
+        alert('Could not get GPS: ' + err.message);
+        btn.disabled = false; btn.textContent = '📍 GPS';
+      }, { enableHighAccuracy: true, timeout: 15000 });
+    });
+
     document.getElementById('jobForm').addEventListener('submit', async e => {
       e.preventDefault();
       const f = new FormData(e.target);
       const rec = job || { id: uid(), createdAt: Date.now() };
-      ['name', 'date', 'jobNo', 'client', 'road', 'workType', 'mix', 'crew', 'qaName', 'notes'].forEach(k => rec[k] = (f.get(k) || '').toString().trim());
+      ['name', 'date', 'jobNo', 'client', 'road', 'workType', 'layout', 'mix', 'treatment', 'crew', 'qaName', 'notes']
+        .forEach(k => rec[k] = (f.get(k) || '').toString().trim());
       rec.density = num(f.get('density')) || DEFAULT_DENSITY;
+      rec.targetDepth = num(f.get('targetDepth')) || DEFAULT_TARGET;
+      rec.mixOrdered = f.get('mixOrdered') === '' ? '' : num(f.get('mixOrdered'));
+      if (gpsLat != null) { rec.lat = gpsLat; rec.lng = gpsLng; }
       await put('jobs', rec);
       location.hash = '#/job/' + rec.id;
     });
@@ -282,9 +361,9 @@
     const photos = await getAll('photos', 'jobId', jobId);
     const photoCount = {};
     photos.forEach(ph => { photoCount[ph.patchId] = (photoCount[ph.patchId] || 0) + 1; });
-
-    const totArea = patches.reduce((a, p) => a + patchArea(p), 0);
-    const totTonnes = patches.reduce((a, p) => a + patchTonnes(p, job.density), 0);
+    const tot = jobTotals(job, patches);
+    const P = pfx(job);
+    const word = patchWord(job);
 
     view.innerHTML = `
       <div class="card">
@@ -292,38 +371,45 @@
           <div class="grow">
             <h3>${esc(job.name || job.road || 'Untitled job')}</h3>
             <div class="sub">${esc(fmtDate(job.date))} &middot; ${esc(job.client || 'No client')}${job.jobNo ? ' &middot; #' + esc(job.jobNo) : ''}</div>
-            <div class="sub">${esc(job.workType)}${job.mix ? ' &middot; ' + esc(job.mix) : ''}${job.road ? ' &middot; ' + esc(job.road) : ''}</div>
+            <div class="sub">${esc(job.workType)} &middot; ${esc(job.layout || LAYOUTS[0])}${job.mix ? ' &middot; ' + esc(job.mix) : ''}</div>
+            <div class="sub">Target ${esc(job.targetDepth || DEFAULT_TARGET)} mm${job.treatment && job.treatment !== 'None' ? ' &middot; ' + esc(job.treatment) : ''}${job.mixOrdered !== '' && job.mixOrdered != null ? ' &middot; ordered ' + esc(job.mixOrdered) + ' t' : ''}</div>
           </div>
           <button class="btn outline small" data-nav="#/job-edit/${job.id}">Edit</button>
         </div>
       </div>
       <div class="grid2">
         <button class="btn dark" data-nav="#/runsheet/${job.id}">Run sheet</button>
+        <button class="btn dark" data-nav="#/stringsheet/${job.id}">String sheet</button>
+        <button class="btn primary" data-nav="#/qareport/${job.id}">QA report (PDF)</button>
         <button class="btn outline" data-nav="#/photos/${job.id}">Photo report</button>
       </div>
-      <div class="section-title">Patches (${patches.length})${patches.length ? ' &middot; ' + fmt(totArea, 1) + ' m&sup2; &middot; ~' + fmt(totTonnes, 1) + ' t' : ''}</div>
+      <div class="section-title">${word === 'area' ? 'Areas' : 'Patches'} (${patches.length})${patches.length ? ' &middot; ' + fmt(tot.area, 1) + ' m&sup2; &middot; ~' + fmt(tot.tonnes, 1) + ' t' : ''}</div>
       ${patches.length ? patches.map(p => {
         const avg = patchAvgDepth(p);
         return `
         <div class="card tappable" data-nav="#/patch/${job.id}/${p.id}">
           <div class="row">
-            <span class="badge">P${p.number}</span>
+            <span class="badge">${P}${p.number}</span>
             <div class="grow">
-              <h3>${esc(p.location || 'No location')}</h3>
+              <h3>${esc(p.location || 'No location')} ${p.deepLift ? '<span class="badge purple">DEEP LIFT</span>' : ''}</h3>
               <div class="sub">${num(p.length) ? fmt(num(p.length), 1) + ' &times; ' + fmt(num(p.width), 1) + ' m = ' + fmt(patchArea(p), 1) + ' m&sup2;' : 'No size yet'}
-                ${num(p.depth) ? ' &middot; design ' + fmt(num(p.depth), 0) + ' mm' : ''}
+                ${patchTarget(p, job) ? ' &middot; target ' + fmt(patchTarget(p, job), 0) + ' mm' : ''}
                 ${avg ? ' &middot; avg cut ' + fmt(avg, 0) + ' mm' : ''}</div>
               <div class="sub">${photoCount[p.id] || 0} photo${(photoCount[p.id] || 0) === 1 ? '' : 's'}${(p.readings || []).length ? ' &middot; ' + p.readings.length + ' string depth' + (p.readings.length > 1 ? 's' : '') : ''}</div>
             </div>
           </div>
         </div>`;
-      }).join('') : '<div class="empty">No patches yet.<br>Tap <b>+</b> to add the first patch.</div>'}
-      <button class="fab" id="addPatch" aria-label="Add patch">+</button>`;
+      }).join('') : '<div class="empty">Nothing captured yet.<br>Tap <b>+</b> to add the first ' + word + '.</div>'}
+      <button class="fab" id="addPatch" aria-label="Add ${word}">+</button>`;
 
     bindNav();
     document.getElementById('addPatch').addEventListener('click', async () => {
       const number = patches.length ? Math.max(...patches.map(p => p.number || 0)) + 1 : 1;
-      const p = { id: uid(), jobId, number, location: '', length: '', width: '', depth: '', readings: [], notes: '', createdAt: Date.now() };
+      const p = {
+        id: uid(), jobId, number, location: '', length: '', width: '',
+        depth: job.targetDepth || DEFAULT_TARGET, deepLift: false,
+        readings: [], notes: '', createdAt: Date.now(),
+      };
       await put('patches', p);
       location.hash = '#/patch/' + jobId + '/' + p.id;
     });
@@ -334,7 +420,9 @@
     const job = await get('jobs', jobId);
     const patch = await get('patches', patchId);
     if (!job || !patch) { location.hash = '#/'; return; }
-    setChrome('Patch P' + patch.number, true);
+    const P = pfx(job);
+    const word = patchWord(job);
+    setChrome(word === 'area' ? 'Area A' + patch.number : 'Patch P' + patch.number, true);
     const photos = (await getAll('photos', 'patchId', patchId)).sort((a, b) => a.createdAt - b.createdAt);
 
     const catBlock = cat => {
@@ -373,8 +461,12 @@
           <label class="fld"><span>Design depth (mm)</span>
             <input type="number" name="depth" step="5" inputmode="numeric" value="${esc(patch.depth)}"></label>
         </div>
-        <div class="sub" id="areaLine" style="margin:-4px 2px 10px"></div>
-        <label class="fld"><span>Patch notes</span>
+        <label class="check">
+          <input type="checkbox" name="deepLift"${patch.deepLift ? ' checked' : ''}>
+          <span><b>Deep lift</b> — deeper than the standard ${esc(job.targetDepth || DEFAULT_TARGET)} mm (set the actual design depth above)</span>
+        </label>
+        <div class="sub" id="areaLine" style="margin:6px 2px 10px"></div>
+        <label class="fld"><span>${word === 'area' ? 'Area' : 'Patch'} notes</span>
           <textarea name="notes" placeholder="Failures, services, anything the paving crew must know">${esc(patch.notes)}</textarea></label>
       </form>
 
@@ -386,12 +478,12 @@
         ${catBlock(STRING_CAT)}
       </div>
 
-      <div class="section-title">Patch photos</div>
+      <div class="section-title">${word === 'area' ? 'Area' : 'Patch'} photos</div>
       <div class="card">
         ${PHOTO_CATS.map(catBlock).join('')}
       </div>
 
-      <button type="button" class="btn danger no-print" id="delPatch">Delete patch P${patch.number}</button>
+      <button type="button" class="btn danger no-print" id="delPatch">Delete ${word} ${P}${patch.number}</button>
       <input type="file" id="photoInput" accept="image/*" capture="environment" multiple hidden>
       </div>`;
 
@@ -402,9 +494,16 @@
 
     function refreshCalcs() {
       const a = patchArea(patch);
-      areaLine.innerHTML = a ? 'Area: <b>' + fmt(a, 1) + ' m&sup2;</b> &middot; est. <b>' + fmt(patchTonnes(patch, job.density), 2) + ' t</b> @ ' + (job.density || DEFAULT_DENSITY) + ' t/m&sup3;' : '';
+      areaLine.innerHTML = a ? 'Area: <b>' + fmt(a, 1) + ' m&sup2;</b> &middot; est. <b>' + fmt(patchTonnes(patch, job), 2) + ' t</b> @ ' + jobDensity(job) + ' t/m&sup3;' : '';
       const avg = patchAvgDepth(patch);
-      avgLine.innerHTML = avg ? 'Average measured depth: <b>' + fmt(avg, 0) + ' mm</b>' + (num(patch.depth) ? ' (design ' + fmt(num(patch.depth), 0) + ' mm)' : '') : 'No readings yet — add one per string line position.';
+      if (!avg) {
+        avgLine.innerHTML = 'No readings yet — add one per string line position.';
+      } else {
+        const pre = patchPrelevel(patch, job);
+        avgLine.innerHTML = 'Average measured depth: <b>' + fmt(avg, 0) + ' mm</b>' +
+          (patchTarget(patch, job) ? ' (target ' + fmt(patchTarget(patch, job), 0) + ' mm)' : '') +
+          (pre.mm > 0 ? ' &middot; <b style="color:var(--danger)">prelevel ' + fmt(pre.mm, 0) + ' mm &asymp; ' + fmt(pre.tonnes, 2) + ' t</b>' : '');
+      }
     }
 
     let saveTimer;
@@ -415,7 +514,7 @@
     form.addEventListener('input', e => {
       const n = e.target.name;
       if (!n || n === 'gps') return;
-      patch[n] = e.target.value;
+      patch[n] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
       refreshCalcs();
       save();
     });
@@ -510,7 +609,7 @@
     });
 
     document.getElementById('delPatch').addEventListener('click', async () => {
-      if (!confirm('Delete patch P' + patch.number + ' and all its photos?')) return;
+      if (!confirm('Delete ' + word + ' ' + P + patch.number + ' and all its photos?')) return;
       for (const ph of photos) await del('photos', ph.id);
       await del('patches', patchId);
       location.hash = '#/job/' + jobId;
@@ -525,16 +624,160 @@
     document.body.appendChild(lb);
   }
 
+  // ----------------------------------------------- shared report HTML blocks
+  function jobMetaHTML(job) {
+    return `
+      <div class="rs-meta">
+        <div><b>Date:</b> ${esc(fmtDate(job.date))}</div>
+        <div><b>Client:</b> ${esc(job.client)}</div>
+        <div><b>Job #:</b> ${esc(job.jobNo)}</div>
+        <div><b>Road:</b> ${esc(job.road)}${job.lat ? ' (' + job.lat.toFixed(5) + ', ' + job.lng.toFixed(5) + ')' : ''}</div>
+        <div><b>Work:</b> ${esc(job.workType)} — ${esc(job.layout || LAYOUTS[0])}</div>
+        <div><b>Mix:</b> ${esc(job.mix)}</div>
+        <div><b>Tack / membrane:</b> ${esc(job.treatment || 'None')}</div>
+        <div><b>Client target depth:</b> ${esc(job.targetDepth || DEFAULT_TARGET)} mm</div>
+        <div><b>Crew:</b> ${esc(job.crew)}</div>
+        <div><b>QA by:</b> ${esc(job.qaName)}</div>
+      </div>`;
+  }
+
+  function runSheetTableHTML(job, patches) {
+    const P = pfx(job);
+    const tot = jobTotals(job, patches);
+    return `
+      <table class="rs">
+        <thead><tr>
+          <th>#</th><th>Location</th>
+          <th class="num">L (m)</th><th class="num">W (m)</th><th class="num">Area (m&sup2;)</th>
+          <th class="num">Design (mm)</th><th class="num">Avg cut (mm)</th>
+          <th class="num">Est. tonnes</th><th class="num">Prelevel (t)</th><th>String depths / notes</th>
+        </tr></thead>
+        <tbody>
+          ${patches.map(p => {
+            const avg = patchAvgDepth(p);
+            const pre = patchPrelevel(p, job);
+            const readings = (p.readings || []).filter(r => r.pos || r.depth)
+              .map(r => esc(r.pos || '?') + ': ' + esc(r.depth) + 'mm').join('; ');
+            return `<tr>
+              <td>${P}${p.number}${p.deepLift ? '<br><span class="badge purple">DEEP</span>' : ''}</td>
+              <td>${esc(p.location)}${p.lat ? '<br><small>' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) + '</small>' : ''}</td>
+              <td class="num">${fmt(num(p.length), 1)}</td>
+              <td class="num">${fmt(num(p.width), 1)}</td>
+              <td class="num">${fmt(patchArea(p), 1)}</td>
+              <td class="num">${patchTarget(p, job) ? fmt(patchTarget(p, job), 0) : ''}</td>
+              <td class="num">${avg ? fmt(avg, 0) : ''}</td>
+              <td class="num">${fmt(patchTonnes(p, job), 2)}</td>
+              <td class="num">${pre.tonnes ? fmt(pre.tonnes, 2) : ''}</td>
+              <td>${readings}${readings && p.notes ? '<br>' : ''}${esc(p.notes)}</td>
+            </tr>`;
+          }).join('')}
+          <tr class="total">
+            <td colspan="4">TOTAL — ${patches.length} ${patchWord(job)}${patches.length === 1 ? '' : 's'}</td>
+            <td class="num">${fmt(tot.area, 1)}</td>
+            <td></td><td></td>
+            <td class="num">${fmt(tot.tonnes, 2)}</td>
+            <td class="num">${tot.prelevel ? fmt(tot.prelevel, 2) : ''}</td>
+            <td>@ ${jobDensity(job)} t/m&sup3;</td>
+          </tr>
+        </tbody>
+      </table>`;
+  }
+
+  function mixSummaryHTML(job, patches, editable) {
+    const tot = jobTotals(job, patches);
+    const ordered = job.mixOrdered === '' || job.mixOrdered == null ? null : num(job.mixOrdered);
+    const variance = ordered != null ? ordered - tot.used : null;
+    return `
+      <div class="mix-summary card">
+        <h3>Mix &amp; prelevel summary</h3>
+        <div class="mix-grid">
+          <div><span>Client target depth</span><b>${esc(job.targetDepth || DEFAULT_TARGET)} mm</b></div>
+          <div><span>Mix ordered</span>
+            ${editable
+              ? '<input type="number" id="mixOrderedInput" step="0.1" inputmode="decimal" value="' + esc(job.mixOrdered) + '" placeholder="t">'
+              : '<b>' + (ordered != null ? fmt(ordered, 2) + ' t' : '—') + '</b>'}</div>
+          <div><span>Mix used (from stringing)</span><b id="mixUsedCell">${fmt(tot.used, 2)} t</b></div>
+          <div><span>Ordered vs used</span><b id="mixVarCell">${variance == null ? '—' : (variance >= 0 ? '+' : '') + fmt(variance, 2) + ' t ' + (variance >= 0 ? '(surplus)' : '(short)')}</b></div>
+          <div><span>Prelevel required</span><b>${tot.prelevel ? fmt(tot.prelevel, 2) + ' t' : 'None'}</b></div>
+          <div><span>Measured ${patchWord(job) === 'area' ? 'areas' : 'patches'}</span><b>${tot.measured} of ${patches.length}</b></div>
+        </div>
+        ${tot.measured < patches.length ? '<div class="sub" style="margin-top:8px">&#9888;&#65039; ' + (patches.length - tot.measured) + ' ' + patchWord(job) + '(s) have no stringing readings yet — “mix used” only counts measured ' + patchWord(job) + 's.</div>' : ''}
+      </div>`;
+  }
+
+  function stringTablesHTML(job, patches) {
+    const P = pfx(job);
+    return patches.map(p => {
+      const readings = (p.readings || []).filter(r => r.pos || r.depth);
+      const avg = patchAvgDepth(p);
+      const target = patchTarget(p, job);
+      const pre = patchPrelevel(p, job);
+      const used = patchUsedTonnes(p, job);
+      return `
+      <div class="string-block">
+        <h3>${P}${p.number} — ${esc(p.location || 'No location')} ${p.deepLift ? '<span class="badge purple">DEEP LIFT</span>' : ''}</h3>
+        <div class="sub">${num(p.length) ? fmt(num(p.length), 1) + ' × ' + fmt(num(p.width), 1) + ' m = ' + fmt(patchArea(p), 1) + ' m²' : 'No size'} · target ${fmt(target, 0)} mm</div>
+        ${readings.length ? `
+        <table class="rs string-table">
+          <thead><tr><th>Position</th><th class="num">Depth (mm)</th><th class="num">vs target (mm)</th></tr></thead>
+          <tbody>
+            ${readings.map(r => {
+              const d = num(r.depth);
+              const diff = d && target ? d - target : null;
+              return `<tr>
+                <td>${esc(r.pos || '—')}</td>
+                <td class="num">${esc(r.depth)}</td>
+                <td class="num">${diff == null ? '' : (diff > 0 ? '+' : '') + fmt(diff, 0)}</td>
+              </tr>`;
+            }).join('')}
+            <tr class="total">
+              <td>Average (${readings.length} reading${readings.length === 1 ? '' : 's'})</td>
+              <td class="num">${avg ? fmt(avg, 0) : ''}</td>
+              <td class="num">${avg && target ? (avg - target > 0 ? '+' : '') + fmt(avg - target, 0) : ''}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="sub" style="margin-top:6px">
+          Mix used &asymp; <b>${fmt(used, 2)} t</b>${pre.mm > 0 ? ' · <b style="color:var(--danger)">Prelevel required: ' + fmt(pre.mm, 0) + ' mm &asymp; ' + fmt(pre.tonnes, 2) + ' t</b>' : (avg && target ? ' · no prelevel needed' : '')}
+        </div>`
+        : '<div class="sub" style="margin:6px 0">No stringing readings recorded.</div>'}
+      </div>`;
+    }).join('');
+  }
+
+  function photoSectionsHTML(job, patches, photos) {
+    const P = pfx(job);
+    return patches.map(p => {
+      const pPhotos = photos.filter(ph => ph.patchId === p.id);
+      if (!pPhotos.length) return '';
+      return `
+      <div class="pr-patch">
+        <h3>${P}${p.number} — ${esc(p.location || 'No location')} ${p.deepLift ? '<span class="badge purple">DEEP LIFT</span>' : ''}</h3>
+        <div class="sub">${num(p.length) ? fmt(num(p.length), 1) + ' × ' + fmt(num(p.width), 1) + ' m' : ''}${patchTarget(p, job) ? ' · target ' + fmt(patchTarget(p, job), 0) + ' mm' : ''}${patchAvgDepth(p) ? ' · avg cut ' + fmt(patchAvgDepth(p), 0) + ' mm' : ''}</div>
+        ${ALL_CATS.map(cat => {
+          const cps = pPhotos.filter(ph => ph.category === cat.key).sort((a, b) => a.createdAt - b.createdAt);
+          if (!cps.length) return '';
+          return `<div class="pr-cat"><h4>${cat.label} (${cps.length})</h4>
+            <div class="pr-grid">${cps.map(ph => '<img src="' + blobUrl(ph.blob) + '" alt="' + cat.label + '">').join('')}</div></div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+  }
+
+  function signOffHTML(job) {
+    return `
+      <div class="sign-row">
+        <div class="sign-box">QA sign-off: ${esc(job.qaName)}</div>
+        <div class="sign-box">Foreman sign-off: ${esc(job.crew)}</div>
+      </div>`;
+  }
+
   // ---------------------------------------------------------------- run sheet
   async function renderRunSheet(jobId) {
     const job = await get('jobs', jobId);
     if (!job) { location.hash = '#/'; return; }
     setChrome('Run sheet', true);
     const patches = (await getAll('patches', 'jobId', jobId)).sort((a, b) => a.number - b.number);
-    const density = job.density || DEFAULT_DENSITY;
-
-    const totArea = patches.reduce((a, p) => a + patchArea(p), 0);
-    const totTonnes = patches.reduce((a, p) => a + patchTonnes(p, density), 0);
 
     view.innerHTML = `
       <div class="grid2 no-print">
@@ -546,62 +789,21 @@
           <h2>Paving Run Sheet</h2>
           <div class="sub">${esc(job.name || '')}</div>
         </div>
-        <div class="rs-meta">
-          <div><b>Date:</b> ${esc(fmtDate(job.date))}</div>
-          <div><b>Client:</b> ${esc(job.client)}</div>
-          <div><b>Job #:</b> ${esc(job.jobNo)}</div>
-          <div><b>Road:</b> ${esc(job.road)}</div>
-          <div><b>Work:</b> ${esc(job.workType)}</div>
-          <div><b>Mix:</b> ${esc(job.mix)}</div>
-          <div><b>Crew:</b> ${esc(job.crew)}</div>
-          <div><b>QA by:</b> ${esc(job.qaName)}</div>
-        </div>
-        <table class="rs">
-          <thead><tr>
-            <th>#</th><th>Location</th>
-            <th class="num">L (m)</th><th class="num">W (m)</th><th class="num">Area (m&sup2;)</th>
-            <th class="num">Design (mm)</th><th class="num">Avg cut (mm)</th>
-            <th class="num">Est. tonnes</th><th>String depths / notes</th>
-          </tr></thead>
-          <tbody>
-            ${patches.map(p => {
-              const avg = patchAvgDepth(p);
-              const readings = (p.readings || []).filter(r => r.pos || r.depth)
-                .map(r => esc(r.pos || '?') + ': ' + esc(r.depth) + 'mm').join('; ');
-              return `<tr>
-                <td>P${p.number}</td>
-                <td>${esc(p.location)}${p.lat ? '<br><small>' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) + '</small>' : ''}</td>
-                <td class="num">${fmt(num(p.length), 1)}</td>
-                <td class="num">${fmt(num(p.width), 1)}</td>
-                <td class="num">${fmt(patchArea(p), 1)}</td>
-                <td class="num">${num(p.depth) ? fmt(num(p.depth), 0) : ''}</td>
-                <td class="num">${avg ? fmt(avg, 0) : ''}</td>
-                <td class="num">${fmt(patchTonnes(p, density), 2)}</td>
-                <td>${readings}${readings && p.notes ? '<br>' : ''}${esc(p.notes)}</td>
-              </tr>`;
-            }).join('')}
-            <tr class="total">
-              <td colspan="4">TOTAL — ${patches.length} patch${patches.length === 1 ? '' : 'es'}</td>
-              <td class="num">${fmt(totArea, 1)}</td>
-              <td></td><td></td>
-              <td class="num">${fmt(totTonnes, 2)}</td>
-              <td>@ ${density} t/m&sup3;</td>
-            </tr>
-          </tbody>
-        </table>
+        ${jobMetaHTML(job)}
+        ${runSheetTableHTML(job, patches)}
         ${job.notes ? '<div class="rs-notes"><b>Job notes:</b> ' + esc(job.notes) + '</div>' : ''}
-        <div class="sign-row">
-          <div class="sign-box">QA sign-off: ${esc(job.qaName)}</div>
-          <div class="sign-box">Foreman sign-off: ${esc(job.crew)}</div>
-        </div>
+        ${signOffHTML(job)}
       </div>`;
 
     document.getElementById('csvBtn').addEventListener('click', () => {
-      const rows = [['Patch', 'Location', 'Lat', 'Lng', 'Length m', 'Width m', 'Area m2', 'Design depth mm', 'Avg cut mm', 'Est tonnes', 'String depths', 'Notes']];
+      const P = pfx(job);
+      const rows = [['#', 'Location', 'Lat', 'Lng', 'Deep lift', 'Length m', 'Width m', 'Area m2', 'Design depth mm', 'Avg cut mm', 'Est tonnes', 'Prelevel t', 'String depths', 'Notes']];
       patches.forEach(p => {
-        rows.push(['P' + p.number, p.location || '', p.lat || '', p.lng || '',
-          num(p.length), num(p.width), fmt(patchArea(p), 2), num(p.depth) || '',
-          patchAvgDepth(p) ? fmt(patchAvgDepth(p), 0) : '', fmt(patchTonnes(p, density), 2),
+        const pre = patchPrelevel(p, job);
+        rows.push([P + p.number, p.location || '', p.lat || '', p.lng || '', p.deepLift ? 'YES' : '',
+          num(p.length), num(p.width), fmt(patchArea(p), 2), patchTarget(p, job) || '',
+          patchAvgDepth(p) ? fmt(patchAvgDepth(p), 0) : '', fmt(patchTonnes(p, job), 2),
+          pre.tonnes ? fmt(pre.tonnes, 2) : '',
           (p.readings || []).map(r => (r.pos || '?') + ':' + r.depth + 'mm').join(' | '), p.notes || '']);
       });
       const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
@@ -611,6 +813,72 @@
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     });
+  }
+
+  // ------------------------------------------------------------- string sheet
+  async function renderStringSheet(jobId) {
+    const job = await get('jobs', jobId);
+    if (!job) { location.hash = '#/'; return; }
+    setChrome('String sheet', true);
+    const patches = (await getAll('patches', 'jobId', jobId)).sort((a, b) => a.number - b.number);
+
+    view.innerHTML = `
+      <button class="btn primary no-print" onclick="window.print()">Print / Save PDF</button>
+      <div class="runsheet">
+        <div class="rs-head">
+          <h2>Stringing Sheet</h2>
+          <div class="sub">${esc(job.name || '')}</div>
+        </div>
+        ${jobMetaHTML(job)}
+        ${mixSummaryHTML(job, patches, true)}
+        ${patches.length ? stringTablesHTML(job, patches) : '<div class="empty">No ' + patchWord(job) + 's in this job yet.</div>'}
+        ${signOffHTML(job)}
+      </div>`;
+
+    const input = document.getElementById('mixOrderedInput');
+    if (input) {
+      let t;
+      input.addEventListener('input', () => {
+        job.mixOrdered = input.value === '' ? '' : num(input.value);
+        clearTimeout(t);
+        t = setTimeout(() => put('jobs', job), 300);
+        const tot = jobTotals(job, patches);
+        const varCell = document.getElementById('mixVarCell');
+        if (job.mixOrdered === '') { varCell.textContent = '—'; return; }
+        const v = num(job.mixOrdered) - tot.used;
+        varCell.textContent = (v >= 0 ? '+' : '') + fmt(v, 2) + ' t ' + (v >= 0 ? '(surplus)' : '(short)');
+      });
+    }
+  }
+
+  // ------------------------------------------------- consolidated QA report
+  async function renderQAReport(jobId) {
+    const job = await get('jobs', jobId);
+    if (!job) { location.hash = '#/'; return; }
+    setChrome('QA report', true);
+    const patches = (await getAll('patches', 'jobId', jobId)).sort((a, b) => a.number - b.number);
+    const photos = await getAll('photos', 'jobId', jobId);
+
+    view.innerHTML = `
+      <button class="btn primary no-print" onclick="window.print()">Print / Save PDF</button>
+      <div class="sub no-print" style="margin:0 2px 12px">Use your browser's print dialog and choose “Save as PDF” for the consolidated QA report.</div>
+      <div class="runsheet">
+        <div class="rs-head">
+          <h2>QA Report</h2>
+          <div class="sub">${esc(job.name || '')}</div>
+        </div>
+        ${jobMetaHTML(job)}
+        ${job.notes ? '<div class="rs-notes" style="margin-bottom:10px"><b>Job notes:</b> ' + esc(job.notes) + '</div>' : ''}
+        <h3 class="report-h">1. Paving run sheet</h3>
+        ${runSheetTableHTML(job, patches)}
+        <h3 class="report-h">2. Mix &amp; prelevel summary</h3>
+        ${mixSummaryHTML(job, patches, false)}
+        <h3 class="report-h">3. Stringing sheets</h3>
+        ${patches.length ? stringTablesHTML(job, patches) : '<div class="sub">No data.</div>'}
+        <h3 class="report-h">4. Photo record</h3>
+        ${photoSectionsHTML(job, patches, photos) || '<div class="sub">No photos captured.</div>'}
+        ${signOffHTML(job)}
+      </div>`;
   }
 
   // ------------------------------------------------------------- photo report
@@ -628,21 +896,7 @@
           <h2>QA Photo Report</h2>
           <div class="sub">${esc(job.name || '')} &middot; ${esc(fmtDate(job.date))} &middot; ${esc(job.client)}${job.jobNo ? ' &middot; #' + esc(job.jobNo) : ''}</div>
         </div>
-        ${patches.map(p => {
-          const pPhotos = photos.filter(ph => ph.patchId === p.id);
-          if (!pPhotos.length) return '';
-          return `
-          <div class="pr-patch">
-            <h3>P${p.number} — ${esc(p.location || 'No location')}</h3>
-            <div class="sub">${num(p.length) ? fmt(num(p.length), 1) + ' × ' + fmt(num(p.width), 1) + ' m' : ''}${num(p.depth) ? ' · design ' + fmt(num(p.depth), 0) + ' mm' : ''}${patchAvgDepth(p) ? ' · avg cut ' + fmt(patchAvgDepth(p), 0) + ' mm' : ''}</div>
-            ${ALL_CATS.map(cat => {
-              const cps = pPhotos.filter(ph => ph.category === cat.key).sort((a, b) => a.createdAt - b.createdAt);
-              if (!cps.length) return '';
-              return `<div class="pr-cat"><h4>${cat.label} (${cps.length})</h4>
-                <div class="pr-grid">${cps.map(ph => '<img src="' + blobUrl(ph.blob) + '" alt="' + cat.label + '">').join('')}</div></div>`;
-            }).join('')}
-          </div>`;
-        }).join('') || '<div class="empty">No photos in this job yet.</div>'}
+        ${photoSectionsHTML(job, patches, photos) || '<div class="empty">No photos in this job yet.</div>'}
       </div>`;
   }
 
