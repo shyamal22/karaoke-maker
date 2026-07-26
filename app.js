@@ -4,6 +4,12 @@
   'use strict';
 
   // ---------------------------------------------------------------- constants
+  // Company branding for generated documents — edit here.
+  const BRAND = {
+    name: 'RCK NZ',
+    tagline: 'Asphalt & Civil Contracting',
+    contact: 'office@rcknz.co.nz • rcknz.co.nz',
+  };
   const PHOTO_CATS = [
     { key: 'before', label: 'Before' },
     { key: 'milled', label: 'Milled' },
@@ -106,6 +112,18 @@
   async function processPhoto(file) {
     try { return await compressImage(file); } catch (e) { return file; }
   }
+  // Photos are stored as raw bytes, not Blobs — iOS Safari can silently
+  // fail to persist Blob objects into IndexedDB. Legacy Blob records still load.
+  function photoBlob(ph) {
+    if (ph.bytes) return new Blob([ph.bytes], { type: ph.type || 'image/jpeg' });
+    return ph.blob;
+  }
+  async function savePhoto(rec, blob) {
+    rec.bytes = await blob.arrayBuffer();
+    rec.type = blob.type || 'image/jpeg';
+    await put('photos', rec);
+  }
+  function haptic() { try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) { /* not supported */ } }
   function blobToDataURL(blob) {
     return new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -441,7 +459,7 @@
         <div class="jp-grid">
           ${generalPhotos.map(ph => `
             <div class="jp-item">
-              <div class="thumb"><img src="${blobUrl(ph.blob)}" alt="Job photo">
+              <div class="thumb"><img src="${blobUrl(photoBlob(ph))}" alt="Job photo">
                 <button class="del" data-delphoto="${ph.id}" aria-label="Delete photo">&#10005;</button></div>
               <input type="text" class="jp-label" data-labelfor="${ph.id}" value="${esc(ph.label)}" placeholder="Add label&hellip;">
             </div>`).join('')}
@@ -482,14 +500,20 @@
       const files = Array.from(inp.files || []);
       inp.value = '';
       if (!files.length) return;
-      for (const f of files) {
-        const blob = await processPhoto(f);
-        await put('photos', { id: uid(), jobId, patchId: '', category: 'general', label: '', blob, createdAt: Date.now() });
+      try {
+        for (const f of files) {
+          const blob = await processPhoto(f);
+          await savePhoto({ id: uid(), jobId, patchId: '', category: 'general', label: '', createdAt: Date.now() }, blob);
+        }
+        haptic();
+      } catch (err) {
+        alert('Photo could not be saved: ' + (err && err.message ? err.message : err));
       }
       renderJob(jobId);
     });
 
     document.getElementById('addPatch').addEventListener('click', async () => {
+      haptic();
       const number = patches.length ? Math.max(...patches.map(p => p.number || 0)) + 1 : 1;
       const p = {
         id: uid(), jobId, number, location: '', length: '', width: '',
@@ -522,7 +546,7 @@
         <div class="photo-grid">
           ${catPhotos.map(ph => `
             <div class="thumb" data-photo="${ph.id}">
-              <img src="${blobUrl(ph.blob)}" alt="${cat.label} photo">
+              <img src="${blobUrl(photoBlob(ph))}" alt="${cat.label} photo">
               <button class="del" data-delphoto="${ph.id}" aria-label="Delete photo">&#10005;</button>
             </div>`).join('')}
           <label class="add-photo" aria-label="Add ${cat.label} photo">&#128247;
@@ -648,6 +672,7 @@
       save();
     });
     document.getElementById('addReading').addEventListener('click', () => {
+      haptic();
       patch.readings = patch.readings || [];
       patch.readings.push({ pos: '', depth: '' });
       renderReadings();
@@ -678,9 +703,14 @@
       const cat = inp.dataset.cat;
       inp.value = '';
       if (!files.length) return;
-      for (const f of files) {
-        const blob = await processPhoto(f);
-        await put('photos', { id: uid(), jobId, patchId, category: cat, blob, createdAt: Date.now() });
+      try {
+        for (const f of files) {
+          const blob = await processPhoto(f);
+          await savePhoto({ id: uid(), jobId, patchId, category: cat, createdAt: Date.now() }, blob);
+        }
+        haptic();
+      } catch (err) {
+        alert('Photo could not be saved: ' + (err && err.message ? err.message : err));
       }
       renderPatch(jobId, patchId);
     });
@@ -702,6 +732,29 @@
   }
 
   // ----------------------------------------------- shared report HTML blocks
+  function reportHeaderHTML(job, docTitle) {
+    return `
+      <div class="brand-head">
+        <div>
+          <div class="brand-name">${esc(BRAND.name)}</div>
+          <div class="brand-tag">${esc(BRAND.tagline)}</div>
+        </div>
+        <div class="brand-doc">
+          <div class="brand-doc-title">${esc(docTitle)}</div>
+          ${job.jobNo ? '<div class="brand-doc-meta">Job ' + esc(job.jobNo) + '</div>' : ''}
+          <div class="brand-doc-meta">${esc(fmtDate(job.date))}</div>
+        </div>
+      </div>
+      <div class="brand-rule"></div>
+      ${job.name || job.road ? '<div class="rs-title">' + esc(job.name || job.road) + '</div>' : ''}`;
+  }
+  function reportFooterHTML(job) {
+    return `
+      <div class="brand-foot">
+        <span>${esc(BRAND.name)} &bull; ${esc(BRAND.contact)}</span>
+        <span>${job.jobNo ? 'Job ' + esc(job.jobNo) + ' &bull; ' : ''}${esc(fmtDate(job.date))}</span>
+      </div>`;
+  }
   function naVal(job, key) {
     const v = job[key];
     if (v !== '' && v != null) return esc(v);
@@ -840,7 +893,7 @@
           const cps = pPhotos.filter(ph => ph.category === cat.key).sort((a, b) => a.createdAt - b.createdAt);
           if (!cps.length) return '';
           return `<div class="pr-cat"><h4>${cat.label} (${cps.length})</h4>
-            <div class="pr-grid">${cps.map(ph => '<img src="' + blobUrl(ph.blob) + '" alt="' + cat.label + '">').join('')}</div></div>`;
+            <div class="pr-grid">${cps.map(ph => '<img src="' + blobUrl(photoBlob(ph)) + '" alt="' + cat.label + '">').join('')}</div></div>`;
         }).join('')}
       </div>`;
     }).join('');
@@ -853,7 +906,7 @@
       <div class="pr-patch">
         <h3>Job photos &amp; dockets</h3>
         <div class="pr-grid">
-          ${gen.map(ph => `<figure class="pr-fig"><img src="${blobUrl(ph.blob)}" alt="${esc(ph.label || 'Job photo')}">${ph.label ? '<figcaption>' + esc(ph.label) + '</figcaption>' : ''}</figure>`).join('')}
+          ${gen.map(ph => `<figure class="pr-fig"><img src="${blobUrl(photoBlob(ph))}" alt="${esc(ph.label || 'Job photo')}">${ph.label ? '<figcaption>' + esc(ph.label) + '</figcaption>' : ''}</figure>`).join('')}
         </div>
       </div>`;
   }
@@ -879,14 +932,12 @@
         <button class="btn outline" id="csvBtn">Export CSV</button>
       </div>
       <div class="runsheet">
-        <div class="rs-head">
-          <h2>Paving Run Sheet</h2>
-          <div class="sub">${esc(job.name || '')}</div>
-        </div>
+        ${reportHeaderHTML(job, 'PAVING RUN SHEET')}
         ${jobMetaHTML(job)}
         ${runSheetTableHTML(job, patches)}
         ${job.notes ? '<div class="rs-notes"><b>Job notes:</b> ' + esc(job.notes) + '</div>' : ''}
         ${signOffHTML(job)}
+        ${reportFooterHTML(job)}
       </div>`;
 
     document.getElementById('csvBtn').addEventListener('click', () => {
@@ -919,14 +970,12 @@
     view.innerHTML = `
       <button class="btn primary no-print" onclick="window.print()">Print / Save PDF</button>
       <div class="runsheet">
-        <div class="rs-head">
-          <h2>Stringing Sheet</h2>
-          <div class="sub">${esc(job.name || '')}</div>
-        </div>
+        ${reportHeaderHTML(job, 'STRINGING SHEET')}
         ${jobMetaHTML(job)}
         ${mixSummaryHTML(job, patches, true)}
         ${patches.length ? stringTablesHTML(job, patches) : '<div class="empty">No ' + patchWord(job) + 's in this job yet.</div>'}
         ${signOffHTML(job)}
+        ${reportFooterHTML(job)}
       </div>`;
 
     const input = document.getElementById('mixOrderedInput');
@@ -1022,6 +1071,7 @@
       const na = e.target.dataset.na;
       if (na === undefined) return;
       const it = items[na];
+      haptic();
       if (it.type === 'job') {
         job.naFlags = job.naFlags || {};
         job.naFlags[it.key] = true;
@@ -1050,10 +1100,7 @@
       <button class="btn primary no-print" onclick="window.print()">Print / Save PDF</button>
       <div class="sub no-print" style="margin:0 2px 12px">Use your browser's print dialog and choose “Save as PDF” for the consolidated QA report.</div>
       <div class="runsheet">
-        <div class="rs-head">
-          <h2>QA Report</h2>
-          <div class="sub">${esc(job.name || '')}</div>
-        </div>
+        ${reportHeaderHTML(job, 'ASPHALT QA REPORT')}
         ${jobMetaHTML(job)}
         ${job.notes ? '<div class="rs-notes" style="margin-bottom:10px"><b>Job notes:</b> ' + esc(job.notes) + '</div>' : ''}
         <h3 class="report-h">1. Paving run sheet</h3>
@@ -1068,6 +1115,7 @@
         <textarea id="qaComments" class="no-print qa-comments" placeholder="Final comments for this report — weather, hold points, anything the client should know&hellip;">${esc(job.reportComments)}</textarea>
         <div class="qa-comments-print" id="qaCommentsPrint">${esc(job.reportComments)}</div>
         ${signOffHTML(job)}
+        ${reportFooterHTML(job)}
       </div>`;
 
     const ta = document.getElementById('qaComments');
@@ -1092,11 +1140,9 @@
     view.innerHTML = `
       <button class="btn primary no-print" onclick="window.print()">Print / Save PDF</button>
       <div class="runsheet">
-        <div class="rs-head">
-          <h2>QA Photo Report</h2>
-          <div class="sub">${esc(job.name || '')} &middot; ${esc(fmtDate(job.date))} &middot; ${esc(job.client)}${job.jobNo ? ' &middot; #' + esc(job.jobNo) : ''}</div>
-        </div>
+        ${reportHeaderHTML(job, 'QA PHOTO REPORT')}
         ${(generalPhotosHTML(photos) + photoSectionsHTML(job, patches, photos)) || '<div class="empty">No photos in this job yet.</div>'}
+        ${reportFooterHTML(job)}
       </div>`;
   }
 
@@ -1108,7 +1154,7 @@
       const photos = await getAll('photos');
       const photosOut = [];
       for (const ph of photos) {
-        photosOut.push({ ...ph, blob: undefined, data: await blobToDataURL(ph.blob) });
+        photosOut.push({ ...ph, blob: undefined, bytes: undefined, data: await blobToDataURL(photoBlob(ph)) });
       }
       const payload = JSON.stringify({ app: 'asphalt-qa', version: 1, exported: new Date().toISOString(), jobs, patches, photos: photosOut });
       const a = document.createElement('a');
@@ -1129,8 +1175,9 @@
       for (const j of data.jobs || []) await put('jobs', j);
       for (const p of data.patches || []) await put('patches', p);
       for (const ph of data.photos || []) {
-        const { data: durl, ...rest } = ph;
-        await put('photos', { ...rest, blob: dataURLToBlob(durl) });
+        const { data: durl, blob, bytes, ...rest } = ph;
+        const b = dataURLToBlob(durl);
+        await put('photos', { ...rest, bytes: await b.arrayBuffer(), type: b.type });
       }
       alert('Import complete.');
       route();
@@ -1144,6 +1191,7 @@
     view.querySelectorAll('[data-nav]').forEach(el => {
       el.addEventListener('click', e => {
         e.stopPropagation();
+        haptic();
         location.hash = el.dataset.nav;
       });
     });
