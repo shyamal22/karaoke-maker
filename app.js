@@ -14,6 +14,7 @@
   const ALL_CATS = PHOTO_CATS.concat([STRING_CAT]);
   const MIX_TYPES = ['AC10', 'AC14', 'AC20', 'SMA10', 'SMA14', 'OGPA', 'Mix 10', 'Mix 20'];
   const TREATMENTS = ['None', 'Tack coat', 'Membrane seal — Grade 4', 'Membrane seal — Grade 3/5'];
+  const JOB_TYPES = ['Mill & Fill', 'Paving only', 'Overlay', 'Dig-out & repave', 'Prelevel & overlay', 'Full reconstruction', 'Footpath', 'Car park'];
   const LAYOUTS = ['Multiple patches', 'Single large area'];
   const DEFAULT_DENSITY = 2.4;   // t/m3 compacted asphalt
   const DEFAULT_TARGET = 40;     // mm generic depth
@@ -152,6 +153,10 @@
   }
   function pfx(job) { return job && job.layout === 'Single large area' ? 'A' : 'P'; }
   function patchWord(job) { return job && job.layout === 'Single large area' ? 'area' : 'patch'; }
+  function patchPlural(job, n) {
+    const w = patchWord(job);
+    return n === 1 ? w : (w === 'patch' ? 'patches' : 'areas');
+  }
 
   function todayISO() {
     const d = new Date();
@@ -226,19 +231,27 @@
     const countBy = {};
     patches.forEach(p => { countBy[p.jobId] = (countBy[p.jobId] || 0) + 1; });
 
-    let html = '';
+    let html = `
+      <div class="page-head">
+        <h2>Jobs</h2>
+        <div class="sub">${jobs.length ? jobs.length + ' job' + (jobs.length > 1 ? 's' : '') + ' on this device' : 'Everything stays on this device'}</div>
+      </div>`;
     if (!jobs.length) {
-      html = '<div class="empty">No jobs yet.<br>Tap <b>+</b> to start your first job.</div>';
+      html += '<div class="empty"><div class="empty-icon">&#128679;</div>No jobs yet.<br>Tap <b>+</b> to start your first job.</div>';
     } else {
-      html = jobs.map(j => `
+      html += jobs.map(j => `
         <div class="card tappable" data-nav="#/job/${j.id}">
           <div class="row">
+            <div class="icon-tile">&#128739;&#65039;</div>
             <div class="grow">
               <h3>${esc(j.name || j.road || 'Untitled job')}</h3>
               <div class="sub">${esc(fmtDate(j.date))} &middot; ${esc(j.client || 'No client')}${j.jobNo ? ' &middot; #' + esc(j.jobNo) : ''}</div>
-              <div class="sub">${esc(j.workType || '')}${countBy[j.id] ? ' &middot; ' + countBy[j.id] + ' ' + patchWord(j) + (countBy[j.id] > 1 ? 's' : '') : ''}</div>
+              <div class="chip-row">
+                <span class="badge orange">${esc((j.workType || 'Job').slice(0, 18))}</span>
+                ${countBy[j.id] ? '<span class="badge grey">' + countBy[j.id] + ' ' + patchPlural(j, countBy[j.id]) + '</span>' : ''}
+              </div>
             </div>
-            <span class="badge ${j.workType === 'Paving only' ? 'green' : 'orange'}">${j.workType === 'Paving only' ? 'PAVE' : 'M&amp;F'}</span>
+            <span class="chev">&#8250;</span>
           </div>
         </div>`).join('');
     }
@@ -275,11 +288,9 @@
           <button type="button" class="btn outline small" id="jobGpsBtn">&#128205; GPS</button>
         </div>
         <div class="grid2">
-          <label class="fld"><span>Work type</span>
-            <select name="workType">
-              <option${j.workType === 'Mill & Fill' ? ' selected' : ''}>Mill &amp; Fill</option>
-              <option${j.workType === 'Paving only' ? ' selected' : ''}>Paving only</option>
-            </select></label>
+          <label class="fld"><span>Job type</span>
+            <input type="text" name="workType" list="typeList" value="${esc(j.workType)}" placeholder="Choose or type your own">
+            <datalist id="typeList">${JOB_TYPES.map(t => `<option value="${esc(t)}">`).join('')}</datalist></label>
           <label class="fld"><span>Job layout</span>
             <select name="layout">
               ${LAYOUTS.map(l => `<option${j.layout === l ? ' selected' : ''}>${l}</option>`).join('')}
@@ -359,37 +370,51 @@
     setChrome(job.name || job.road || 'Job', true);
     const patches = (await getAll('patches', 'jobId', jobId)).sort((a, b) => a.number - b.number);
     const photos = await getAll('photos', 'jobId', jobId);
+    const generalPhotos = photos.filter(ph => ph.category === 'general').sort((a, b) => a.createdAt - b.createdAt);
     const photoCount = {};
-    photos.forEach(ph => { photoCount[ph.patchId] = (photoCount[ph.patchId] || 0) + 1; });
+    photos.forEach(ph => { if (ph.patchId) photoCount[ph.patchId] = (photoCount[ph.patchId] || 0) + 1; });
     const tot = jobTotals(job, patches);
     const P = pfx(job);
     const word = patchWord(job);
 
     view.innerHTML = `
-      <div class="card">
+      <div id="jobRoot">
+      <div class="hero">
         <div class="row">
           <div class="grow">
-            <h3>${esc(job.name || job.road || 'Untitled job')}</h3>
-            <div class="sub">${esc(fmtDate(job.date))} &middot; ${esc(job.client || 'No client')}${job.jobNo ? ' &middot; #' + esc(job.jobNo) : ''}</div>
-            <div class="sub">${esc(job.workType)} &middot; ${esc(job.layout || LAYOUTS[0])}${job.mix ? ' &middot; ' + esc(job.mix) : ''}</div>
-            <div class="sub">Target ${esc(job.targetDepth || DEFAULT_TARGET)} mm${job.treatment && job.treatment !== 'None' ? ' &middot; ' + esc(job.treatment) : ''}${job.mixOrdered !== '' && job.mixOrdered != null ? ' &middot; ordered ' + esc(job.mixOrdered) + ' t' : ''}</div>
+            <h2>${esc(job.name || job.road || 'Untitled job')}</h2>
+            <div class="hero-sub">${esc(fmtDate(job.date))} &middot; ${esc(job.client || 'No client')}${job.jobNo ? ' &middot; #' + esc(job.jobNo) : ''}</div>
           </div>
-          <button class="btn outline small" data-nav="#/job-edit/${job.id}">Edit</button>
+          <button class="hero-edit" data-nav="#/job-edit/${job.id}">Edit</button>
+        </div>
+        <div class="chip-row">
+          <span class="chip">${esc(job.workType || 'Job')}</span>
+          <span class="chip">${esc(job.layout || LAYOUTS[0])}</span>
+          ${job.mix ? '<span class="chip">' + esc(job.mix) + '</span>' : ''}
+          <span class="chip">Target ${esc(job.targetDepth || DEFAULT_TARGET)} mm</span>
+          ${job.treatment && job.treatment !== 'None' ? '<span class="chip">' + esc(job.treatment) + '</span>' : ''}
+          ${job.mixOrdered !== '' && job.mixOrdered != null ? '<span class="chip">Ordered ' + esc(job.mixOrdered) + ' t</span>' : ''}
         </div>
       </div>
-      <div class="grid2">
-        <button class="btn dark" data-nav="#/runsheet/${job.id}">Run sheet</button>
-        <button class="btn dark" data-nav="#/stringsheet/${job.id}">String sheet</button>
-        <button class="btn primary" data-nav="#/qareport/${job.id}">QA report (PDF)</button>
-        <button class="btn outline" data-nav="#/photos/${job.id}">Photo report</button>
+      <div class="stats">
+        <div class="stat s-orange"><b>${fmt(tot.area, 1)}</b><span>m&sup2; total</span></div>
+        <div class="stat s-blue"><b>${fmt(tot.tonnes, 1)}</b><span>est. tonnes</span></div>
+        <div class="stat s-green"><b>${patches.length}</b><span>${word === 'area' ? 'areas' : 'patches'}</span></div>
+        <div class="stat s-purple"><b>${photos.length}</b><span>photos</span></div>
       </div>
-      <div class="section-title">${word === 'area' ? 'Areas' : 'Patches'} (${patches.length})${patches.length ? ' &middot; ' + fmt(tot.area, 1) + ' m&sup2; &middot; ~' + fmt(tot.tonnes, 1) + ' t' : ''}</div>
+      <div class="tiles">
+        <button class="tile" data-nav="#/runsheet/${job.id}"><span class="tile-ic t-orange">&#128203;</span>Run sheet</button>
+        <button class="tile" data-nav="#/stringsheet/${job.id}"><span class="tile-ic t-blue">&#128207;</span>String sheet</button>
+        <button class="tile" data-nav="#/qareport/${job.id}"><span class="tile-ic t-green">&#129534;</span>QA report</button>
+        <button class="tile" data-nav="#/photos/${job.id}"><span class="tile-ic t-purple">&#128247;</span>Photo report</button>
+      </div>
+      <div class="section-title">${word === 'area' ? 'Areas' : 'Patches'} (${patches.length})</div>
       ${patches.length ? patches.map(p => {
         const avg = patchAvgDepth(p);
         return `
         <div class="card tappable" data-nav="#/patch/${job.id}/${p.id}">
           <div class="row">
-            <span class="badge">${P}${p.number}</span>
+            <span class="num-tile">${P}${p.number}</span>
             <div class="grow">
               <h3>${esc(p.location || 'No location')} ${p.deepLift ? '<span class="badge purple">DEEP LIFT</span>' : ''}</h3>
               <div class="sub">${num(p.length) ? fmt(num(p.length), 1) + ' &times; ' + fmt(num(p.width), 1) + ' m = ' + fmt(patchArea(p), 1) + ' m&sup2;' : 'No size yet'}
@@ -397,12 +422,66 @@
                 ${avg ? ' &middot; avg cut ' + fmt(avg, 0) + ' mm' : ''}</div>
               <div class="sub">${photoCount[p.id] || 0} photo${(photoCount[p.id] || 0) === 1 ? '' : 's'}${(p.readings || []).length ? ' &middot; ' + p.readings.length + ' string depth' + (p.readings.length > 1 ? 's' : '') : ''}</div>
             </div>
+            <span class="chev">&#8250;</span>
           </div>
         </div>`;
-      }).join('') : '<div class="empty">Nothing captured yet.<br>Tap <b>+</b> to add the first ' + word + '.</div>'}
-      <button class="fab" id="addPatch" aria-label="Add ${word}">+</button>`;
+      }).join('') : '<div class="empty"><div class="empty-icon">&#128736;&#65039;</div>Nothing captured yet.<br>Tap <b>+</b> to add the first ' + word + '.</div>'}
+      <div class="section-title">Job photos &amp; dockets (${generalPhotos.length})</div>
+      <div class="card">
+        <div class="sub" style="margin-bottom:10px">Anything that belongs to the whole job — site overviews, temperature readings, delivery dockets. Add a label so it makes sense in the report.</div>
+        <div class="jp-grid">
+          ${generalPhotos.map(ph => `
+            <div class="jp-item">
+              <div class="thumb"><img src="${blobUrl(ph.blob)}" alt="Job photo">
+                <button class="del" data-delphoto="${ph.id}" aria-label="Delete photo">&#10005;</button></div>
+              <input type="text" class="jp-label" data-labelfor="${ph.id}" value="${esc(ph.label)}" placeholder="Add label&hellip;">
+            </div>`).join('')}
+        </div>
+        <button type="button" class="btn soft" id="addJobPhoto">&#128247; Add job photo</button>
+      </div>
+      <input type="file" id="jobPhotoInput" accept="image/*" capture="environment" multiple hidden>
+      <button class="fab" id="addPatch" aria-label="Add ${word}">+</button>
+      </div>`;
 
     bindNav();
+
+    // job-level photos: add / label / delete / view
+    const jpInput = document.getElementById('jobPhotoInput');
+    const labelTimers = {};
+    document.getElementById('jobRoot').addEventListener('click', e => {
+      if (e.target.closest('#addJobPhoto')) { jpInput.click(); return; }
+      const d = e.target.closest('[data-delphoto]');
+      if (d) {
+        e.stopPropagation();
+        if (confirm('Delete this photo?')) del('photos', d.dataset.delphoto).then(() => renderJob(jobId));
+        return;
+      }
+      const img = e.target.closest('.jp-item img');
+      if (img) openLightbox(img.src);
+    });
+    document.getElementById('jobRoot').addEventListener('input', e => {
+      const id = e.target.dataset.labelfor;
+      if (!id) return;
+      const ph = generalPhotos.find(x => x.id === id);
+      if (!ph) return;
+      ph.label = e.target.value;
+      clearTimeout(labelTimers[id]);
+      labelTimers[id] = setTimeout(() => put('photos', ph), 350);
+    });
+    jpInput.addEventListener('change', async () => {
+      const files = Array.from(jpInput.files || []);
+      jpInput.value = '';
+      for (const f of files) {
+        try {
+          const blob = await compressImage(f);
+          await put('photos', { id: uid(), jobId, patchId: '', category: 'general', label: '', blob, createdAt: Date.now() });
+        } catch (err) {
+          alert('Could not add a photo: ' + err.message);
+        }
+      }
+      if (files.length) renderJob(jobId);
+    });
+
     document.getElementById('addPatch').addEventListener('click', async () => {
       const number = patches.length ? Math.max(...patches.map(p => p.number || 0)) + 1 : 1;
       const p = {
@@ -672,7 +751,7 @@
             </tr>`;
           }).join('')}
           <tr class="total">
-            <td colspan="4">TOTAL — ${patches.length} ${patchWord(job)}${patches.length === 1 ? '' : 's'}</td>
+            <td colspan="4">TOTAL — ${patches.length} ${patchPlural(job, patches.length)}</td>
             <td class="num">${fmt(tot.area, 1)}</td>
             <td></td><td></td>
             <td class="num">${fmt(tot.tonnes, 2)}</td>
@@ -762,6 +841,18 @@
         }).join('')}
       </div>`;
     }).join('');
+  }
+
+  function generalPhotosHTML(photos) {
+    const gen = photos.filter(ph => ph.category === 'general').sort((a, b) => a.createdAt - b.createdAt);
+    if (!gen.length) return '';
+    return `
+      <div class="pr-patch">
+        <h3>Job photos &amp; dockets</h3>
+        <div class="pr-grid">
+          ${gen.map(ph => `<figure class="pr-fig"><img src="${blobUrl(ph.blob)}" alt="${esc(ph.label || 'Job photo')}">${ph.label ? '<figcaption>' + esc(ph.label) + '</figcaption>' : ''}</figure>`).join('')}
+        </div>
+      </div>`;
   }
 
   function signOffHTML(job) {
@@ -876,9 +967,22 @@
         <h3 class="report-h">3. Stringing sheets</h3>
         ${patches.length ? stringTablesHTML(job, patches) : '<div class="sub">No data.</div>'}
         <h3 class="report-h">4. Photo record</h3>
-        ${photoSectionsHTML(job, patches, photos) || '<div class="sub">No photos captured.</div>'}
+        ${(generalPhotosHTML(photos) + photoSectionsHTML(job, patches, photos)) || '<div class="sub">No photos captured.</div>'}
+        <h3 class="report-h">5. QA comments</h3>
+        <textarea id="qaComments" class="no-print qa-comments" placeholder="Final comments for this report — weather, hold points, anything the client should know&hellip;">${esc(job.reportComments)}</textarea>
+        <div class="qa-comments-print" id="qaCommentsPrint">${esc(job.reportComments)}</div>
         ${signOffHTML(job)}
       </div>`;
+
+    const ta = document.getElementById('qaComments');
+    const printDiv = document.getElementById('qaCommentsPrint');
+    let ct;
+    ta.addEventListener('input', () => {
+      job.reportComments = ta.value;
+      printDiv.textContent = ta.value;
+      clearTimeout(ct);
+      ct = setTimeout(() => put('jobs', job), 300);
+    });
   }
 
   // ------------------------------------------------------------- photo report
@@ -896,7 +1000,7 @@
           <h2>QA Photo Report</h2>
           <div class="sub">${esc(job.name || '')} &middot; ${esc(fmtDate(job.date))} &middot; ${esc(job.client)}${job.jobNo ? ' &middot; #' + esc(job.jobNo) : ''}</div>
         </div>
-        ${photoSectionsHTML(job, patches, photos) || '<div class="empty">No photos in this job yet.</div>'}
+        ${(generalPhotosHTML(photos) + photoSectionsHTML(job, patches, photos)) || '<div class="empty">No photos in this job yet.</div>'}
       </div>`;
   }
 

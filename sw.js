@@ -1,5 +1,5 @@
 /* Asphalt QA service worker — cache app shell so it works with no signal on site */
-const CACHE = 'asphalt-qa-v2';
+const CACHE = 'asphalt-qa-v3';
 const ASSETS = ['./', './index.html', './app.css', './app.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
