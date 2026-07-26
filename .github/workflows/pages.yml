@@ -24,6 +24,7 @@ jobs:
           git checkout --orphan gh-pages
           git rm -r --cached .github --quiet
           rm -rf .github
+          touch .nojekyll
           git add -A
           git commit -m "Deploy ${GITHUB_SHA::7}"
           git push --force origin gh-pages

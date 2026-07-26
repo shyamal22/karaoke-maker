@@ -16,11 +16,15 @@ A simple, phone-friendly app for QA staff on asphalt crews doing **mill & fill**
 
 ## Getting it onto phones
 
-The app is plain HTML/JS — any static hosting works. The easiest free option is **GitHub Pages**:
+The app is plain HTML/JS and deploys itself: every push runs the **Deploy to GitHub Pages** workflow, which publishes the app to the `gh-pages` branch.
+
+One-time setup (repo owner only):
 
 1. In this repository go to **Settings → Pages**.
-2. Under *Build and deployment*, set Source to **Deploy from a branch**, pick the branch and `/ (root)`, and save.
-3. Open the published URL on each QA's phone, then use the browser's **"Add to Home Screen"** (Share menu on iPhone, ⋮ menu on Android). It installs like a normal app and works offline afterwards.
+2. Under *Build and deployment*, set Source to **Deploy from a branch**, pick **`gh-pages`** and **`/ (root)`**, and save.
+3. After a minute the app is live at `https://<owner>.github.io/<repo>/`.
+
+Then on each QA's phone: open that URL and use the browser's **"Add to Home Screen"** (Share menu on iPhone, ⋮ menu on Android). It installs like a normal app and works offline afterwards. Any future push to the repo updates the live app automatically.
 
 ## Important notes for the crew
 
