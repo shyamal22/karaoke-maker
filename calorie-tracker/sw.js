@@ -1,5 +1,5 @@
 /* KCAL service worker — cache-first so the app works fully offline. */
-const CACHE = "kcal-v1";
+const CACHE = "kcal-v2";
 const ASSETS = [
   ".",
   "index.html",

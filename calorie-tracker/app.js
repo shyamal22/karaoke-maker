@@ -41,11 +41,11 @@ function shiftDate(iso, days) {
   return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
 }
 function fmtDate(iso) {
-  if (iso === todayISO()) return "TODAY";
-  if (iso === shiftDate(todayISO(), -1)) return "YESTERDAY";
+  if (iso === todayISO()) return "Today";
+  if (iso === shiftDate(todayISO(), -1)) return "Yesterday";
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("en-NZ", { weekday: "short", day: "numeric", month: "short" }).toUpperCase();
+  return dt.toLocaleDateString("en-NZ", { weekday: "short", day: "numeric", month: "short" });
 }
 
 /* ---------------- food db ---------------- */
@@ -116,7 +116,7 @@ function renderSummary() {
   $("#sum-eaten").textContent = Math.round(t.kcal);
   $("#sum-goal").textContent = goal;
   $("#sum-left").textContent = Math.abs(Math.round(left));
-  $("#sum-left-label").textContent = left >= 0 ? "LEFT" : "OVER";
+  $("#sum-left-label").textContent = left >= 0 ? "Left" : "Over";
   $("#sum-left").parentElement.classList.toggle("over", left < 0);
   const fill = $("#meter-fill");
   fill.style.width = Math.min(100, (t.kcal / goal) * 100) + "%";
@@ -137,7 +137,7 @@ function renderMeals() {
     box.className = "meal";
     const head = document.createElement("div");
     head.className = "meal-head";
-    head.innerHTML = `<span>${meal}</span><span>${kcal} KCAL</span>`;
+    head.innerHTML = `<span>${meal}</span><span>${kcal} kcal</span>`;
     box.appendChild(head);
     if (!items.length) {
       const empty = document.createElement("div");
@@ -188,7 +188,7 @@ function renderFreq() {
     if (!food) continue;
     const chip = document.createElement("button");
     chip.className = "chip";
-    chip.textContent = "↺ " + food.name.toUpperCase();
+    chip.textContent = "↺ " + food.name;
     chip.addEventListener("click", () => openPortion(food));
     wrap.appendChild(chip);
   }
@@ -212,10 +212,10 @@ searchInput.addEventListener("input", () => {
   if (!hits.length) {
     const none = document.createElement("div");
     none.className = "result-none";
-    none.innerHTML = `NOT IN DATABASE.`;
+    none.textContent = "Not in the database.";
     const btn = document.createElement("button");
     btn.className = "btn btn-small";
-    btn.textContent = "+ QUICK ADD “" + q.trim().toUpperCase() + "”";
+    btn.textContent = "+ Quick add “" + q.trim() + "”";
     btn.addEventListener("click", () => { openQuick(q.trim()); });
     none.appendChild(document.createElement("br"));
     none.appendChild(btn);
@@ -226,7 +226,7 @@ searchInput.addEventListener("input", () => {
     row.className = "result";
     row.innerHTML =
       `<div><div class="result-name"></div><div class="result-sub"></div></div>
-       <div class="result-kcal">${f.kcal} KCAL</div>`;
+       <div class="result-kcal">${f.kcal} kcal</div>`;
     row.querySelector(".result-name").textContent = (f._custom ? "★ " : "") + f.name;
     row.querySelector(".result-sub").textContent = f.serving + (f.cat ? " · " + f.cat : "");
     row.addEventListener("click", () => openPortion(f));
@@ -250,16 +250,18 @@ function guessMeal() {
   return "DINNER";
 }
 
+function fmtMeal(m) { return m.charAt(0) + m.slice(1).toLowerCase(); }
+
 function buildMealBtns(container, selected, onPick) {
   container.innerHTML = "";
   for (const m of MEALS) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "mealbtn" + (m === selected ? " sel" : "");
-    b.textContent = m;
+    b.textContent = fmtMeal(m);
     b.addEventListener("click", () => {
       onPick(m);
-      [...container.children].forEach(c => c.classList.toggle("sel", c.textContent === m));
+      [...container.children].forEach(c => c.classList.toggle("sel", c === b));
     });
     container.appendChild(b);
   }
@@ -269,8 +271,8 @@ function openPortion(food) {
   portionFood = food;
   portionQty = 1;
   portionMeal = guessMeal();
-  $("#portion-name").textContent = food.name.toUpperCase();
-  $("#portion-serving").textContent = `1 SERVING = ${food.serving}${food.grams ? ` (${food.grams} g)` : ""}`;
+  $("#portion-name").textContent = food.name;
+  $("#portion-serving").textContent = `1 serving = ${food.serving}`;
   $("#portion-qty").value = "1";
   document.querySelectorAll(".qty").forEach(b => b.classList.toggle("sel", b.dataset.q === "1"));
   buildMealBtns($("#portion-meals"), portionMeal, m => portionMeal = m);
@@ -279,7 +281,7 @@ function openPortion(food) {
 }
 
 function updatePortionKcal() {
-  $("#portion-kcal").textContent = Math.round(portionFood.kcal * portionQty) + " KCAL";
+  $("#portion-kcal").textContent = Math.round(portionFood.kcal * portionQty) + " kcal";
 }
 
 document.querySelectorAll(".qty").forEach(b => {
@@ -373,17 +375,17 @@ function renderWeightStats() {
   const s = weightSeries();
   const box = $("#weight-stats");
   box.innerHTML = "";
-  if (!s.length) { box.innerHTML = `<div class="wstat">NO ENTRIES YET. LOG TODAY'S WEIGHT ABOVE.</div>`; return; }
+  if (!s.length) { box.innerHTML = `<div class="chart-empty">No entries yet — log today's weight above.</div>`; return; }
   const cur = s[s.length - 1];
   const first = s[0];
   const diff = Math.round((cur.kg - first.kg) * 10) / 10;
   const stats = [
-    ["CURRENT", cur.kg + " kg", ""],
-    ["CHANGE", (diff > 0 ? "+" : "") + diff + " kg", diff < 0 ? "down" : diff > 0 ? "up" : ""],
+    ["Current", cur.kg + " kg", ""],
+    ["Change", (diff > 0 ? "+" : "") + diff + " kg", diff < 0 ? "down" : diff > 0 ? "up" : ""],
   ];
   if (settings.goalWeight) {
     const togo = Math.round((cur.kg - settings.goalWeight) * 10) / 10;
-    stats.push(["TO GOAL " + settings.goalWeight + " KG", (togo > 0 ? togo + " kg to lose" : togo < 0 ? Math.abs(togo) + " kg under" : "AT GOAL"), ""]);
+    stats.push(["To goal " + settings.goalWeight + " kg", (togo > 0 ? togo + " kg to go" : togo < 0 ? Math.abs(togo) + " kg under" : "at goal"), ""]);
   }
   for (const [label, val, cls] of stats) {
     const el = document.createElement("div");
@@ -400,7 +402,7 @@ function renderWeightChart() {
   const tip = $("#weight-tip");
   const all = weightSeries();
   const s = all.slice(-90);
-  $("#chart-range-note").textContent = s.length ? `LAST ${s.length} ENTRIES` : "";
+  $("#chart-range-note").textContent = s.length ? `· last ${s.length} entries` : "";
   if (s.length < 2) {
     wrap.innerHTML = `<div class="chart-empty">Need at least 2 weigh-ins to draw a trend.</div>`;
     return;
@@ -421,30 +423,30 @@ function renderWeightChart() {
   for (let i = 0; i <= ticks; i++) {
     const v = min + (i / ticks) * (max - min);
     const yy = y(v);
-    grid += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}" stroke="#d9d9d9" stroke-width="1"/>`;
-    labels += `<text x="${padL - 6}" y="${yy + 4}" text-anchor="end" font-size="15" fill="#555" font-family="inherit">${v.toFixed(1)}</text>`;
+    grid += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}" stroke="#ece5d8" stroke-width="1"/>`;
+    labels += `<text x="${padL - 6}" y="${yy + 4}" text-anchor="end" font-size="15" fill="#8a8377" font-family="inherit">${v.toFixed(1)}</text>`;
   }
   // x labels: first and last date
   const dlab = iso => iso.slice(5).replace("-", "/");
-  labels += `<text x="${padL}" y="${H - 8}" font-size="15" fill="#555">${dlab(s[0].date)}</text>`;
-  labels += `<text x="${W - padR}" y="${H - 8}" text-anchor="end" font-size="15" fill="#555">${dlab(s[s.length - 1].date)}</text>`;
+  labels += `<text x="${padL}" y="${H - 8}" font-size="15" fill="#8a8377">${dlab(s[0].date)}</text>`;
+  labels += `<text x="${W - padR}" y="${H - 8}" text-anchor="end" font-size="15" fill="#8a8377">${dlab(s[s.length - 1].date)}</text>`;
 
   const path = s.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.kg).toFixed(1)).join(" ");
 
   let goalLine = "";
   if (settings.goalWeight) {
     const gy = y(settings.goalWeight);
-    goalLine = `<line x1="${padL}" y1="${gy}" x2="${W - padR}" y2="${gy}" stroke="#000" stroke-width="1.5" stroke-dasharray="6 5"/>
-      <text x="${W - padR}" y="${gy - 5}" text-anchor="end" font-size="15" font-weight="bold" fill="#000">GOAL ${settings.goalWeight}</text>`;
+    goalLine = `<line x1="${padL}" y1="${gy}" x2="${W - padR}" y2="${gy}" stroke="#d97a4a" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <text x="${W - padR}" y="${gy - 5}" text-anchor="end" font-size="15" font-weight="bold" fill="#d97a4a">Goal ${settings.goalWeight}</text>`;
   }
 
   const last = s[s.length - 1];
   wrap.innerHTML =
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Body weight trend chart">
       ${grid}${labels}${goalLine}
-      <path d="${path}" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <circle id="chart-dot" cx="${x(s.length - 1)}" cy="${y(last.kg)}" r="4.5" fill="#000"/>
-      <text x="${Math.min(x(s.length - 1), W - padR - 4)}" y="${Math.max(12, y(last.kg) - 10)}" text-anchor="end" font-size="16" font-weight="bold" fill="#000">${last.kg} kg</text>
+      <path d="${path}" fill="none" stroke="#33302b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle id="chart-dot" cx="${x(s.length - 1)}" cy="${y(last.kg)}" r="4.5" fill="#d97a4a" stroke="#fff" stroke-width="1.5"/>
+      <text x="${Math.min(x(s.length - 1), W - padR - 4)}" y="${Math.max(12, y(last.kg) - 10)}" text-anchor="end" font-size="16" font-weight="bold" fill="#33302b">${last.kg} kg</text>
       <rect id="chart-hit" x="${padL}" y="0" width="${W - padL - padR}" height="${H}" fill="transparent"/>
     </svg>`;
 
@@ -512,7 +514,7 @@ const dlgSettings = $("#dlg-settings");
 $("#btn-settings").addEventListener("click", () => {
   $("#set-goal").value = settings.goal;
   $("#set-goal-weight").value = settings.goalWeight ?? "";
-  $("#db-count").textContent = `FOOD DATABASE: ${DB.length} ITEMS · MY FOODS: ${customFoods.length}`;
+  $("#db-count").textContent = `Food database: ${DB.length} items · My foods: ${customFoods.length}`;
   dlgSettings.showModal();
 });
 
