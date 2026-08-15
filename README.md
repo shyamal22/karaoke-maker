@@ -1,3 +1,14 @@
+# RCK field apps
+
+Two plain HTML/JS apps, no accounts and no server, both deployed from this repo:
+
+| App | Where | For |
+| --- | --- | --- |
+| **Asphalt QA** | `/` — see below | QA staff on mill & fill and paving jobs, on a phone |
+| **[Sign In / Sign Out](signin/)** | `/signin/` | The office tablet — who is on site, which crew, which job, and the hours that go with it |
+
+---
+
 # Asphalt QA
 
 A simple, phone-friendly app for QA staff on asphalt crews doing **mill & fill** or **paving** work. No accounts, no server, no signal needed — everything is stored on the QA's device and it works fully offline once loaded.

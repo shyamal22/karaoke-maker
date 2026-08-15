@@ -1,0 +1,16 @@
+{
+  "name": "RCK Sign In / Sign Out",
+  "short_name": "RCK Sign In",
+  "description": "Tablet sign in and sign out for RCK crews: who is on site, which crew, which job, and the hours that go with it.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
