@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RCK Group">
+  <rect width="64" height="64" rx="8" fill="#0b0c0c"/>
+  <path d="M6 52 L18 12 L58 12 L46 52 Z" fill="#7cda24" opacity="0.16"/>
+  <text x="32" y="41"
+        font-family="Archivo, Arial Black, Helvetica, sans-serif"
+        font-size="24" font-weight="800" font-style="italic"
+        letter-spacing="-0.5"
+        text-anchor="middle" fill="#ffe800">RCK</text>
+  <rect x="6" y="54" width="52" height="4" fill="#7cda24"/>
+</svg>
