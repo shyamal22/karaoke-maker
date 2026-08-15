@@ -730,11 +730,13 @@ h4 {
   display: block;
   overflow: hidden;
 }
+/* The hero's resting state is visible and the intro animates *from* hidden
+   (fill-mode: backwards). If animations never run — disabled by the browser,
+   an extension, or a stylesheet failure — the headline still shows. */
 .hero__title span > i {
   display: block;
   font-style: normal;
-  transform: translateY(105%);
-  animation: heroLine 1.05s var(--ease) forwards;
+  animation: heroLine 1.05s var(--ease) backwards;
 }
 .hero__title span:nth-child(2) > i {
   animation-delay: 0.09s;
@@ -743,8 +745,8 @@ h4 {
   animation-delay: 0.18s;
 }
 @keyframes heroLine {
-  to {
-    transform: translateY(0);
+  from {
+    transform: translateY(105%);
   }
 }
 .hero__lede {
@@ -753,29 +755,22 @@ h4 {
   font-size: var(--step-1);
   line-height: 1.55;
   color: rgba(246, 245, 242, 0.78);
-  opacity: 0;
-  animation: fadeUp 0.9s var(--ease) 0.42s forwards;
+  animation: fadeUp 0.9s var(--ease) 0.42s backwards;
 }
 .hero__actions {
   margin-top: 2.25rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.85rem;
-  opacity: 0;
-  animation: fadeUp 0.9s var(--ease) 0.56s forwards;
+  animation: fadeUp 0.9s var(--ease) 0.56s backwards;
 }
 .hero .eyebrow {
-  opacity: 0;
-  animation: fadeUp 0.8s var(--ease) 0.15s forwards;
+  animation: fadeUp 0.8s var(--ease) 0.15s backwards;
 }
 @keyframes fadeUp {
   from {
     opacity: 0;
     transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 .hero__scroll {
@@ -1869,7 +1864,8 @@ h4 {
   .hero__title span > i,
   .hero__lede,
   .hero__actions,
-  .hero .eyebrow {
+  .hero .eyebrow,
+  .hero__scroll-line::after {
     opacity: 1;
     transform: none;
     animation: none;

@@ -251,7 +251,9 @@ ${clientsMarquee()}
         </div>
         <div class="gallery-grid" data-reveal-stagger>
           ${gallery.images
-            .slice(0, 7)
+            /* Five tiles fill the 4-column grid exactly: one 2x2 feature plus
+               four singles. Any other count leaves holes. */
+            .slice(0, 5)
             .map(
               (g) =>
                 `<figure>${picture(g.file, g.alt, { sizes: '(max-width: 620px) 50vw, 25vw' })}</figure>`
