@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0a0c10">
+<title>Asphalt QA</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header id="topbar">
+  <button id="backBtn" class="icon-btn" hidden>&#8592;</button>
+  <h1 id="title">Asphalt QA</h1>
+  <button id="menuBtn" class="icon-btn">&#8942;</button>
+</header>
+<nav id="menu" hidden>
+  <button data-action="export">Export backup</button>
+  <button data-action="import">Import backup</button>
+  <button data-action="about">About</button>
+</nav>
+<main id="view"></main>
+<input type="file" id="importFile" accept="application/json" hidden>
+<script src="app.js"></script>
+</body>
+</html>
