@@ -23,6 +23,8 @@ import {
   clients,
   gallery,
   about,
+  structure,
+  team,
   contact,
 } from './src/content.mjs';
 import { page, header, footer, ctaBand, eyebrow, button, picture, esc } from './src/layout.mjs';
@@ -71,6 +73,106 @@ function serviceCards(list = services, { dark = false } = {}) {
           )
           .join('\n        ')}
       </div>`;
+}
+
+/** Six division cards — the company-structure block. */
+function structureSection() {
+  return `<section class="section section--muted">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <div>
+            ${eyebrow(structure.eyebrow)}
+            <h2 class="section-head__title">${esc(structure.headline)}</h2>
+          </div>
+          <div class="section-head__aside">
+            <p class="lede">${esc(structure.lede)}</p>
+          </div>
+        </div>
+        <div class="divisions" data-reveal-stagger>
+          ${structure.divisions
+            .map(
+              (d) => `<article class="division">
+            <h3 class="division__name">${esc(d.name)}</h3>
+            <p class="division__covers">${esc(d.covers)}</p>
+            <p class="division__body">${esc(d.body)}</p>
+            ${d.lead ? `<p class="division__lead"><span>Division lead</span>${esc(d.lead)}</p>` : ''}
+          </article>`
+            )
+            .join('\n          ')}
+        </div>
+      </div>
+    </section>`;
+}
+
+/** People cards. Falls back to a typographic initial where there is no photo. */
+function teamSection() {
+  const cards = team.people
+    .map(
+      (p) => `<article class="person">
+            <div class="person__portrait">
+              ${
+                p.photo
+                  ? picture(p.photo, p.name, { sizes: '(max-width: 620px) 100vw, 33vw' })
+                  : `<span class="person__initial" aria-hidden="true">${esc(p.name.trim().charAt(0))}</span>`
+              }
+            </div>
+            <div class="person__body">
+              <h3 class="person__name">${esc(p.name)}</h3>
+              <p class="person__role">${esc(p.role)}</p>
+              ${p.covers ? `<p class="person__covers">${esc(p.covers)}</p>` : ''}
+              <ul class="person__contact">
+                ${p.phone ? `<li><a href="${p.phone.href}">${esc(p.phone.display)}</a></li>` : ''}
+                ${p.email ? `<li><a href="mailto:${p.email}">${esc(p.email)}</a></li>` : ''}
+              </ul>
+            </div>
+          </article>`
+    )
+    .join('\n          ');
+
+  return `<section class="section section--dark">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <div>
+            ${eyebrow(team.eyebrow)}
+            <h2 class="section-head__title">${esc(team.headline)}</h2>
+          </div>
+          <div class="section-head__aside">
+            <p class="lede">${esc(team.lede)}</p>
+          </div>
+        </div>
+        <div class="team-layout${team.people.length < 3 ? ' team-layout--feature' : ''}">
+          <div class="team-grid" data-reveal-stagger>
+            ${cards}
+          </div>
+          ${
+            team.people.length < 3
+              ? `<aside class="team-aside" data-reveal>
+            <h3 class="team-aside__title">One call covers the whole job.</h3>
+            <p class="team-aside__body">Because every division is in-house, ${esc(
+              site.contactName
+            )} can price and programme milling, surfacing, concrete, reinstatement and traffic management on the same call — you are not chasing four subcontractors for one site.</p>
+            <dl class="team-aside__list">
+              <div>
+                <dt>Office and accounts</dt>
+                <dd><a href="mailto:${site.email}">${esc(site.email)}</a></dd>
+              </div>
+              <div>
+                <dt>Hours</dt>
+                <dd>Monday – Friday, 7am – 5pm. Night and weekend works by arrangement, and traffic management 24/7 as required.</dd>
+              </div>
+              <div>
+                <dt>Head office</dt>
+                <dd>${esc(site.address.street)}, ${esc(site.address.suburb)}, ${esc(site.address.city)}</dd>
+              </div>
+            </dl>
+            ${team.note ? `<p class="team-note">${esc(team.note)}</p>` : ''}
+          </aside>`
+              : ''
+          }
+        </div>
+        ${team.people.length >= 3 && team.note ? `<p class="team-note" data-reveal>${esc(team.note)}</p>` : ''}
+      </div>
+    </section>`;
 }
 
 function clientsMarquee() {
@@ -389,6 +491,7 @@ function buildService(service) {
           <aside class="aside-card" data-reveal>
             <h2 class="aside-card__title">Get a price on this.</h2>
             <p class="aside-card__body">All of our work is programmed to cause as minimal disruption as possible — including night works and weekend work if required.</p>
+            <p class="aside-card__list-title" style="margin-top:1.75rem;margin-bottom:0">Talk to ${esc(site.contactName)}</p>
             <a class="aside-card__phone" href="${site.phone.href}">${esc(site.phone.display)}</a>
             ${button('Send us a message', 'contact.html', 'accent')}
             <div class="aside-card__list">
@@ -454,7 +557,11 @@ function buildAbout() {
 
 ${statRail()}
 
-    <section class="section section--dark">
+${structureSection()}
+
+${teamSection()}
+
+    <section class="section">
       <div class="container">
         <div class="section-head" data-reveal>
           <div>
@@ -634,26 +741,22 @@ function buildContact() {
               </button>
 
               <p class="form__status" data-form-status hidden></p>
-              <p class="form__note">Prefer to talk it through? Call ${esc(site.phone.display)} — we answer after hours for urgent works.</p>
+              <p class="form__note">Prefer to talk it through? Call ${esc(site.contactName)} on ${esc(site.phone.display)} — we answer after hours for urgent works.</p>
             </form>
           </div>
 
           <aside class="contact-panel" data-reveal>
             <div class="contact-block">
-              <h3>Phone</h3>
-              <a href="${site.phone.href}">${esc(site.phone.display)}</a>
-              <p class="contact-block__hint">General enquiries and urgent call-outs</p>
-            </div>
-            <div class="contact-block">
-              <h3>Second line</h3>
-              <a href="${site.phoneAlt.href}">${esc(site.phoneAlt.display)}</a>
+              <h3>Speak to</h3>
+              <a href="${site.phone.href}">${esc(site.contactName)} — ${esc(site.phone.display)}</a>
+              <p class="contact-block__hint">Quotes, programming, urgent call-outs — every division</p>
             </div>
             <div class="contact-block">
               <h3>Email</h3>
-              <a href="mailto:${site.email}">${esc(site.email)}</a>
+              <a href="mailto:${site.emailSales}">${esc(site.emailSales)}</a>
+              <p class="contact-block__hint">Quotes and new work</p>
+              <a href="mailto:${site.email}" style="display:block;margin-top:0.75rem">${esc(site.email)}</a>
               <p class="contact-block__hint">Office and accounts</p>
-              <a href="mailto:${site.emailSales}" style="display:block;margin-top:0.75rem">${esc(site.emailSales)}</a>
-              <p class="contact-block__hint">Quotes and new business</p>
             </div>
             <div class="contact-block">
               <h3>Head office</h3>

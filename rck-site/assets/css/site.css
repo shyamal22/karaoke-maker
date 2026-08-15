@@ -228,8 +228,7 @@ h4 {
 .mobile-nav,
 .aside-card,
 .contact-panel,
-.process,
-.values {
+.person {
   --eyebrow-fg: var(--text-invert-muted);
 }
 .eyebrow__tick {
@@ -1308,6 +1307,9 @@ h4 {
   font-size: var(--step--1);
   color: var(--text-invert-muted);
 }
+.aside-card__list-title + .aside-card__phone {
+  margin-top: 0.2rem;
+}
 .aside-card__phone {
   display: block;
   margin-top: 1.75rem;
@@ -1392,12 +1394,12 @@ h4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
-  background: var(--line-dark);
-  border-top: 1px solid var(--line-dark);
-  border-bottom: 1px solid var(--line-dark);
+  background: var(--line-light);
+  border-top: 1px solid var(--line-light);
+  border-bottom: 1px solid var(--line-light);
 }
 .value {
-  background: var(--ink);
+  background: var(--paper);
   padding: clamp(1.75rem, 3vw, 2.5rem);
 }
 .value h3 {
@@ -1415,7 +1417,218 @@ h4 {
 .value p {
   margin-top: 0.85rem;
   font-size: var(--step--1);
+  color: var(--text-muted);
+}
+.section--dark .values,
+.section--ink2 .values {
+  background: var(--line-dark);
+  border-color: var(--line-dark);
+}
+.section--dark .value,
+.section--ink2 .value {
+  background: var(--ink);
+}
+.section--dark .value p,
+.section--ink2 .value p {
   color: var(--text-invert-muted);
+}
+
+/* --- Divisions (company structure) ---------------------------------------- */
+.divisions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line-light);
+  border: 1px solid var(--line-light);
+}
+.division {
+  background: var(--paper);
+  padding: clamp(1.75rem, 2.8vw, 2.5rem);
+  display: flex;
+  flex-direction: column;
+}
+.division__name {
+  font-size: var(--step-2);
+  letter-spacing: -0.03em;
+}
+.division__covers {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line-light);
+  font-family: 'Archivo', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  line-height: 1.6;
+}
+.division__body {
+  margin-top: 1rem;
+  font-size: var(--step--1);
+  color: var(--text-muted);
+}
+.division__lead {
+  margin-top: auto;
+  padding-top: 1.75rem;
+  font-size: var(--step--1);
+  font-weight: 500;
+}
+.division__lead span {
+  display: block;
+  font-family: 'Archivo', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+/* --- Team ----------------------------------------------------------------- */
+.team-layout {
+  display: grid;
+  gap: clamp(2rem, 5vw, 4.5rem);
+}
+/* With only one or two people listed, the grid would float in a wide empty
+   band — pair it with a panel instead. */
+.team-layout--feature {
+  grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+  align-items: start;
+}
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 380px));
+  gap: clamp(1rem, 2vw, 1.75rem);
+}
+.team-aside__title {
+  font-size: var(--step-3);
+  max-width: 18ch;
+}
+.team-aside__body {
+  margin-top: 1.25rem;
+  color: var(--text-invert-muted);
+  max-width: 56ch;
+}
+.team-aside__list {
+  margin-top: 2.25rem;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--line-dark);
+}
+.team-aside__list > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.5fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--line-dark);
+}
+.team-aside__list dt {
+  font-family: 'Archivo', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-invert-muted);
+  padding-top: 0.2em;
+}
+.team-aside__list dd {
+  margin: 0;
+  font-size: var(--step--1);
+}
+.team-aside__list a {
+  transition: color 0.25s var(--ease);
+}
+.team-aside__list a:hover {
+  color: var(--accent);
+}
+.person {
+  background: var(--ink-2);
+  border: 1px solid var(--line-dark);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.person__portrait {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--ink-3);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.person__portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.person__initial {
+  font-family: 'Archivo', sans-serif;
+  font-size: clamp(3.5rem, 7vw, 5rem);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.9;
+}
+.person__body {
+  padding: clamp(1.5rem, 2.4vw, 2rem);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.person__name {
+  font-size: var(--step-2);
+  letter-spacing: -0.03em;
+}
+.person__role {
+  margin-top: 0.4rem;
+  font-family: 'Archivo', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.person__covers {
+  margin-top: 1rem;
+  font-size: var(--step--1);
+  color: var(--text-invert-muted);
+}
+.person__contact {
+  margin-top: auto;
+  padding-top: 1.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.person__contact a {
+  font-size: var(--step-1);
+  transition: color 0.25s var(--ease);
+}
+.person__contact a:hover {
+  color: var(--accent);
+}
+.team-note {
+  margin-top: clamp(2rem, 3vw, 2.5rem);
+  max-width: 60ch;
+  font-size: var(--step--1);
+  color: var(--text-invert-muted);
+}
+
+/* --- Contact-name affordances --------------------------------------------- */
+.header__phone-name {
+  color: var(--accent);
+  margin-right: 0.45rem;
+}
+.mobile-nav__label {
+  font-family: 'Archivo', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-invert-muted);
+  margin-bottom: 0.35rem;
 }
 
 /* --- CTA band ------------------------------------------------------------- */
@@ -1753,7 +1966,8 @@ h4 {
   .services-grid,
   .process,
   .also-grid,
-  .values {
+  .values,
+  .divisions {
     grid-template-columns: repeat(2, 1fr);
   }
   .gallery-grid {
@@ -1788,6 +2002,9 @@ h4 {
   }
   .split--reverse .split__media {
     order: 0;
+  }
+  .team-layout--feature {
+    grid-template-columns: 1fr;
   }
   .section-head {
     align-items: start;
@@ -1829,9 +2046,17 @@ h4 {
   .process,
   .also-grid,
   .values,
+  .divisions,
   .footer__inner,
   .form__row {
     grid-template-columns: 1fr;
+  }
+  .team-grid {
+    grid-template-columns: 1fr;
+  }
+  .team-aside__list > div {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
   .gallery-grid {
     grid-template-columns: repeat(2, 1fr);

@@ -83,7 +83,7 @@ export function header(current, { overHero = false } = {}) {
         <div class="header__actions">
           <a class="header__phone" href="${site.phone.href}">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5c0 5.5 4.5 10 10 10l1-2.2-3-1.4-1.3 1.3a11 11 0 0 1-4.4-4.4L6.1 5.5 4.7 2.5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-            <span>${esc(site.phone.display)}</span>
+            <span><span class="header__phone-name">${esc(site.contactName)}</span>${esc(site.phone.display)}</span>
           </a>
           ${button('Get a quote', 'contact.html', 'accent')}
           <button class="burger" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open menu" data-burger>
@@ -105,8 +105,9 @@ export function header(current, { overHero = false } = {}) {
           <li><a href="contact.html">Contact</a></li>
         </ul>
         <div class="mobile-nav__foot">
+          <p class="mobile-nav__label">${esc(site.contactName)}, your point of contact</p>
           <a class="mobile-nav__call" href="${site.phone.href}">${esc(site.phone.display)}</a>
-          <a class="mobile-nav__mail" href="mailto:${site.email}">${esc(site.email)}</a>
+          <a class="mobile-nav__mail" href="mailto:${site.emailSales}">${esc(site.emailSales)}</a>
         </div>
       </div>
     </div>`;
@@ -122,7 +123,7 @@ export function ctaBand() {
         </div>
         <div class="cta-band__actions">
           <a class="cta-band__phone" href="${site.phone.href}">
-            <span class="cta-band__phone-label">Call now</span>
+            <span class="cta-band__phone-label">Call ${esc(site.contactName)}</span>
             <span class="cta-band__phone-number">${esc(site.phone.display)}</span>
           </a>
           ${button('Send us a message', 'contact.html', 'ghost')}
@@ -166,10 +167,9 @@ export function footer() {
         <div class="footer__col footer__col--contact">
           <h2 class="footer__heading">Get in touch</h2>
           <ul class="footer__list footer__list--contact">
-            <li><a href="${site.phone.href}">${esc(site.phone.display)}</a></li>
-            <li><a href="${site.phoneAlt.href}">${esc(site.phoneAlt.display)}</a></li>
-            <li><a href="mailto:${site.email}">${esc(site.email)}</a></li>
+            <li><a href="${site.phone.href}">${esc(site.contactName)} — ${esc(site.phone.display)}</a></li>
             <li><a href="mailto:${site.emailSales}">${esc(site.emailSales)}</a></li>
+            <li><a href="mailto:${site.email}">${esc(site.email)}</a></li>
           </ul>
           <address class="footer__address">
             ${esc(site.address.street)}<br>
@@ -185,9 +185,9 @@ export function footer() {
       </div>
     </footer>
 
-    <a class="sticky-call" href="${site.phone.href}" aria-label="Call ${esc(site.phone.display)}">
+    <a class="sticky-call" href="${site.phone.href}" aria-label="Call ${esc(site.contactName)} on ${esc(site.phone.display)}">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5c0 5.5 4.5 10 10 10l1-2.2-3-1.4-1.3 1.3a11 11 0 0 1-4.4-4.4L6.1 5.5 4.7 2.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-      <span>Call ${esc(site.phone.display)}</span>
+      <span>Call ${esc(site.contactName)} — ${esc(site.phone.display)}</span>
     </a>`;
 }
 
@@ -213,6 +213,15 @@ function jsonLd(page) {
       addressCountry: 'NZ',
     },
     areaServed: { '@type': 'Country', name: 'New Zealand' },
+    contactPoint: {
+      '@type': 'ContactPoint',
+      name: site.contactName,
+      contactType: 'sales',
+      telephone: site.phone.display,
+      email: site.emailSales,
+      areaServed: 'NZ',
+      availableLanguage: 'en',
+    },
     sameAs: [site.facebook],
   };
   if (page.breadcrumb) {

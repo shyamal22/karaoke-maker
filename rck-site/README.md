@@ -81,13 +81,18 @@ python3 tools/optimise-images.py    # downscales to 1600px and writes .webp sibl
    currently falls back to opening the visitor's email client with the fields filled in.
    Set it to a Formspree/Netlify/server endpoint for proper submissions. A honeypot field
    is already in place; add a captcha if spam becomes a problem.
-2. **Check the details.** Phone numbers, both email addresses, the Whenuapai address and the
-   Silverdale yard were taken from the current site — confirm they are still correct.
-3. **Accreditations.** The SiteWise badge shown is the 2022/23 artwork carried over from the
+2. **Check the details.** Sam (021 0911 5951) is the single point of contact throughout the
+   site; the old 027 600 8301 number has been removed. Confirm the Whenuapai address and the
+   Silverdale yard are still correct.
+3. **Fill in the team.** `team.people` in `src/content.mjs` currently lists Sam. Copy the shape
+   documented above it to add crew leads and division managers. Cards without a `photo` fall
+   back to a typographic initial, so the grid stays tidy until you have portraits. Division
+   leads can be named per division via the `lead` field in `structure.divisions`.
+4. **Accreditations.** The SiteWise badge shown is the 2022/23 artwork carried over from the
    existing site. Swap in the current year's badge.
-4. **Photography.** The imagery is the existing site's library. A day with a photographer on
+5. **Photography.** The imagery is the existing site's library. A day with a photographer on
    two or three live sites would lift this further than any amount of code.
-5. **Client logos.** Amotai, Citycare, Downer, Fulton Hogan, Higgins and Ventia are shown as
+6. **Client logos.** Amotai, Citycare, Downer, Fulton Hogan, Higgins and Ventia are shown as
    on the current site. Confirm each is happy to be named.
 
 ## Deploying

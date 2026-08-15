@@ -11,8 +11,9 @@ export const site = {
   description:
     'RCK Group is a nationwide, Auckland-based asphalt, concrete and reinstatement specialist. Family owned since 2007.',
   established: 2007,
-  phone: { display: '027 600 8301', href: 'tel:+64276008301' },
-  phoneAlt: { display: '021 0911 5951', href: 'tel:+6421091159510' },
+  /** Single point of contact for the whole site. */
+  contactName: 'Sam',
+  phone: { display: '021 0911 5951', href: 'tel:+642109115951' },
   email: 'office@rcknz.co.nz',
   emailSales: 'sam@rcknz.co.nz',
   address: {
@@ -401,6 +402,100 @@ export const about = {
       body: 'Completed to council specification and design requirement, and backed by our guarantee.',
     },
   ],
+};
+
+/* ------------------------------------------------------------------ *
+ * Company structure and people
+ * ------------------------------------------------------------------ */
+
+/**
+ * How the business is organised. These six divisions group the thirteen
+ * service lines, and match how the existing site describes the company —
+ * "RCK uses the skills of its other departments", "our line marking and
+ * traffic management departments work closely together".
+ *
+ * `lead` names the person who runs that division. Leave it empty and the
+ * card simply omits the line — fill them in as you are ready to publish names.
+ */
+export const structure = {
+  eyebrow: 'How we are structured',
+  headline: 'Six divisions, one programme.',
+  lede:
+    'Thirteen service lines sit under six in-house divisions. Because they are all ours, a job that needs milling, reinstatement, concrete and marking is one programme and one point of contact — not four subcontractors and four invoices.',
+  divisions: [
+    {
+      name: 'Surfacing',
+      covers: 'Asphalt paving, overlays, chipseal, crack and joint sealing',
+      body: 'Highways, car parks, driveways and everything between, laid to council specification and guaranteed.',
+      lead: '',
+    },
+    {
+      name: 'Reinstatement',
+      covers: 'Trench backfill, footpaths, berms, parks and reserves',
+      body: 'Full reinstatement after utility and construction works for high-profile companies and New Zealand government networks.',
+      lead: '',
+    },
+    {
+      name: 'Concrete',
+      covers: 'Vehicle crossings, driveways, footpaths, carriageways',
+      body: 'Formed, poured and finished to council specification and design requirement.',
+      lead: '',
+    },
+    {
+      name: 'Plant & milling',
+      covers: 'Road millers, Bobcats, attachments, hard surface sweeping',
+      body: 'Our own machines and operators, available on our jobs or for hire on yours.',
+      lead: '',
+    },
+    {
+      name: 'Traffic management',
+      covers: 'Category A, B and C traffic control, events, line marking',
+      body: 'Licensed crews on our own books, planning the site around your operating hours. Available 24/7.',
+      lead: '',
+    },
+    {
+      name: 'Supply & haulage',
+      covers: 'Aggregate, scoria, sand, recycled millings, clean fill, transport',
+      body: 'Supply yard in Silverdale, clean fill taken away, and machinery moved anywhere in the country.',
+      lead: '',
+    },
+  ],
+};
+
+/**
+ * The people page. `Sam` is the point of contact for the business.
+ *
+ * To add someone, copy the shape below. `photo` is optional — leave it out
+ * and the card falls back to a typographic initial, so the grid stays tidy
+ * until you have proper photography:
+ *
+ *   {
+ *     name: 'Jane Smith',
+ *     role: 'Contracts manager',
+ *     covers: 'Reinstatement and concrete',
+ *     phone: { display: '021 000 0000', href: 'tel:+6421000000' },
+ *     email: 'jane@rcknz.co.nz',
+ *     photo: 'assets/img/team/jane.jpg',
+ *   }
+ */
+export const team = {
+  eyebrow: 'The team',
+  headline: 'You deal with the people doing the work.',
+  lede:
+    'A family business since 2007, which in practice means the person who prices your job is the person accountable for it. No call centre, no account manager two steps removed from the site.',
+  people: [
+    {
+      name: 'Sam',
+      role: 'Point of contact',
+      covers: 'Quotes, programming and new work across every division',
+      phone: { display: '021 0911 5951', href: 'tel:+642109115951' },
+      email: 'sam@rcknz.co.nz',
+      photo: '',
+    },
+  ],
+  /** Shown under the grid — the honest version of "we are hiring / more to come". */
+  note:
+    'Crew leads and division managers are listed as we add their details. For anything urgent, Sam is the fastest way in.',
 };
 
 export const contact = {
