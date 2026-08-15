@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [claude/asphalt-qa-app-4au7ri, main, master]
+    branches: [claude/asphalt-qa-app-4au7ri, claude/fitness-vlog-compiler-ero8jr, main, master]
   workflow_dispatch:
 
 permissions:
