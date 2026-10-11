@@ -15,7 +15,6 @@ import urllib.request
 TOKEN_URL = "https://identity.xero.com/connect/token"
 API_BASE = "https://api.xero.com/api.xro/2.0"
 CONNECTIONS_URL = "https://api.xero.com/connections"
-SCOPES = "accounting.transactions accounting.contacts.read accounting.settings.read"
 
 
 class XeroError(RuntimeError):
@@ -43,9 +42,10 @@ class XeroClient:
         basic = base64.b64encode(
             f"{self.client_id}:{self.client_secret}".encode()
         ).decode()
-        body = urllib.parse.urlencode(
-            {"grant_type": "client_credentials", "scope": SCOPES}
-        ).encode()
+        # No scope parameter: a client_credentials token then carries every
+        # scope configured on the Custom Connection, whatever variants were
+        # ticked in the portal (read-only vs full, friendly-name groupings).
+        body = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode()
         req = urllib.request.Request(
             TOKEN_URL,
             data=body,
